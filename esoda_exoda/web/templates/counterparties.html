@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Αντισυμβαλλόμενοι — Έσοδα-Έξοδα myDATA{% endblock %}
+{% block main %}
+<p class="eyebrow">ΠΟΙΟΣ ΕΙΝΑΙ ΠΟΙΟΣ</p>
+<h1 class="title">Αντισυμβαλλόμενοι <span class="count">{{ rows | length }}</span></h1>
+<p class="lede">Κάθε ΑΦΜ που εμφανίστηκε στα βιβλία, με το όνομα που έδωσε η ΑΑΔΕ και τον
+χαρακτηρισμό που προτείνεται όταν δεν υπάρχει επίσημος. Όσοι δεν έχουν προεπιλογή παράγουν
+ΑΓΝΩΣΤΟ στη στήλη «Εκπίπτει» — γι' αυτό είναι πρώτοι.</p>
+{% if saved %}<div class="msg"><span class="k">Αποθηκεύτηκε</span> Ο αντισυμβαλλόμενος #{{ saved }}.</div>{% endif %}
+{% if vies %}<div class="msg{% if vies.missing or vies.failed %} m-warn{% endif %}"><span class="k">VIES</span>
+  Συμπληρώθηκαν {{ vies.filled }} από {{ vies.total }}.
+  {% if vies.missing %}Χωρίς στοιχεία στο VIES: <span class="mono">{{ vies.missing | join(', ') }}</span>.{% endif %}
+  {% if vies.failed %}Σφάλμα: {% for vat, err in vies.failed %}<span class="mono">{{ vat }}</span> ({{ err }}){% if not loop.last %}, {% endif %}{% endfor %}.{% endif %}
+</div>{% endif %}
+<div class="gobar"><a class="act" href="/counterparties/new">Νέος αντισυμβαλλόμενος</a>
+  {% if nameless %}<form method="post" action="/counterparties/vies-fill"><button class="act" type="submit">Συμπλήρωσε ονόματα από VIES ({{ nameless }} χωρίς όνομα)</button></form>{% endif %}</div>
+<div class="block"><div class="scroll">
+<table class="reg">
+  <thead><tr><th class="given">ΑΦΜ</th><th class="given">ΧΩΡΑ</th><th>ΟΝΟΜΑ</th>
+    <th class="r">ΠΑΡΑΣΤΑΤΙΚΑ</th><th>ΤΕΛΕΥΤΑΙΟ</th><th>ΠΡΟΕΠΙΛΟΓΗ ΕΞΟΔΟΥ</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    {% set d = r.cp.defaults.get('expense') %}
+    <tr{% if r.missing_default %} class="unset"{% endif %}>
+      <td class="given code"><a href="/counterparties/{{ r.cp.id }}">{{ r.cp.vat }}</a></td>
+      <td class="given">{{ r.cp.country }}</td>
+      <td>{{ r.cp.name or '—' }}{% if r.cp.separate_totals %} <span class="hint">δικά του υποσύνολα</span>{% endif %}</td>
+      <td class="num r">{{ r.invoices }}</td>
+      <td class="mono">{{ r.last_date.strftime('%d/%m/%Y') if r.last_date else '' }}</td>
+      <td>{% if d %}{{ cfg.category_labels.get(d.category_code, d.category_code) }} / {{ d.e3_code }}
+          {% if d.deductible is true %}· εκπίπτει{% elif d.deductible is false %}· δεν εκπίπτει{% endif %}
+          {% if d.inv_type %}· {{ d.inv_type }}{% endif %}
+          {% elif r.missing_default %}<em>χωρίς προεπιλογή — ΑΓΝΩΣΤΟ</em>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

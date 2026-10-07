@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Κατάσταση — Έσοδα-Έξοδα myDATA{% endblock %}
+
+{% block main %}
+<p class="eyebrow">ΤΟΠΙΚΑ, ΣΤΟΝ ΥΠΟΛΟΓΙΣΤΗ ΣΟΥ</p>
+<h1 class="title">Κατάσταση</h1>
+<p class="lede">Τα βιβλία διαβάζονται από την ΑΑΔΕ όσες φορές θέλεις. Ό,τι στέλνεις
+προς την ΑΑΔΕ φεύγει μία φορά και δεν γυρίζει.</p>
+
+<div class="block">
+  <h2 class="h2">Ό,τι έχει σταλεί
+    <span class="count">{{ transmissions | length }}
+      {{ 'διαβίβαση' if transmissions | length == 1 else 'διαβιβάσεις' }} · αμετάκλητες</span></h2>
+  {% if transmissions %}
+    <ul class="log">
+      {% for t in transmissions %}
+        <li>
+          <span class="mk">{{ t.mark }}</span>
+          <span class="what">{{ cfg.type_labels.get(t.inv_type, t.inv_type) }} ·
+            <span class="mono">{{ t.net | eur }} €</span> ·
+            Σειρά <span class="mono">{{ t.series }}</span> /
+            ΑΑ <span class="mono">{{ t.aa }}</span> ·
+            έκδοση <span class="mono">{{ t.issue_date | imerominia }}</span></span>
+          <span class="when">στάλθηκε <span class="mono">{{ t.at | ora }}</span>{% if t.uid %} · UID <span class="mono">{{ t.uid }}</span>{% endif %}</span>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="msg">
+      <span class="k">Ακύρωση</span>
+      Γίνεται μόνο από το portal του myDATA, με βάση το MARK. Το αντίγραφό σου είναι στη βάση,
+      πίνακας <span class="mono">invoice_submission</span>.
+    </div>
+  {% else %}
+    <p class="empty">Δεν έχει σταλεί κανένα αυτο-δηλούμενο παραστατικό από εδώ.</p>
+  {% endif %}
+</div>
+
+<div class="block split">
+  <div>
+    <h2 class="h2">Χαρακτηρισμός εξόδων</h2>
+    <p class="lede">Έξοδα που έλαβες. Διάλεξε μήνα — τίποτα δεν φεύγει από αυτή την οθόνη.</p>
+    <form class="form" method="get" action="/classify">
+      <div class="fields">
+        {# Ένα πεδίο αντί για δύο. Όπου ο browser δεν έχει επιλογή μήνα (Firefox),
+           το input γίνεται κείμενο — γι' αυτό το pattern και η υπόδειξη. #}
+        <div class="f"><label for="period">Μήνας</label>
+          <input id="period" name="period" type="month" required
+                 pattern="\d{4}-\d{2}" placeholder="2026-07"
+                 value="{{ year }}-{{ '%02d'|format(month) }}">
+          <span class="hint">yyyy-mm</span></div>
+      </div>
+      <button class="act" type="submit">Άνοιγμα μήνα</button>
+    </form>
+  </div>
+  <div>
+    <h2 class="h2">Ανανέωση βιβλίων</h2>
+    <p class="lede">Κατεβάζει έσοδα, έξοδα και χαρακτηρισμούς από την ΑΑΔΕ και τα κρατά στη
+    βάση. Μόνο διάβασμα — έξι κλήσεις ανά ανανέωση.</p>
+    <form class="form" method="post" action="/refresh">
+      <div class="fields">
+        <div class="f"><label for="ry">Έτος</label>
+          <input id="ry" name="year" type="text" inputmode="numeric" value="{{ year }}"></div>
+        <div class="f"><label for="rm">Μήνας</label>
+          <input id="rm" name="month" type="text" inputmode="numeric" value="{{ month }}">
+          <span class="hint">κενό = όλη η χρονιά</span></div>
+      </div>
+      <button class="act" type="submit">Ανανέωση</button>
+    </form>
+  </div>
+</div>
+
+<div class="block">
+  <h2 class="h2">Βιβλία {{ year }}
+    <span class="count"><a href="/export/{{ year }}.xlsx">Κατέβασε ΣΥΝΟΛΑ {{ year }}.xlsx</a></span></h2>
+  {% if months %}
+    <div class="scroll"><table class="reg">
+      <thead><tr><th class="given">ΜΗΝΑΣ</th><th class="given r">ΕΣΟΔΑ</th><th class="r">ΕΞΟΔΑ</th>
+        <th class="r">ΑΓΝΩΣΤΟ ΕΚΠΙΠΤΕΙ</th><th>ΤΕΛΕΥΤΑΙΑ ΑΝΑΝΕΩΣΗ</th></tr></thead>
+      <tbody>
+      {% for m in months %}
+        <tr><td class="given num">{{ "%02d"|format(m.month) }}/{{ year }}</td>
+            <td class="given num r">{{ m.income }}</td><td class="num r">{{ m.expenses }}</td>
+            <td class="num r{% if m.unknown %} unk{% endif %}">{{ m.unknown }}</td>
+            <td class="mono">{{ m.last_refresh.strftime('%d/%m/%Y %H:%M') if m.last_refresh else 'ποτέ' }}</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+  {% else %}
+    <p class="empty">Καμία ανανέωση για το {{ year }} ακόμη.</p>
+  {% endif %}
+</div>
+
+<p class="gloss"><b>Δύο αφετηρίες, μία έξοδος.</b> Ο χαρακτηρισμός εξόδων και η
+διαβίβαση εξόδου καταλήγουν και οι δύο στην ίδια οθόνη ελέγχου. Εκεί είναι το μόνο
+κουμπί που στέλνει — και είναι το μόνο κόκκινο της εφαρμογής.</p>
+{% endblock %}

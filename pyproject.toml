@@ -1,0 +1,31 @@
+# ABOUTME: Ορισμός πακέτου esoda-exoda, εξαρτήσεις και ρύθμιση pytest.
+# ABOUTME: Το πακέτο εγκαθίσταται editable για development.
+[project]
+name = "esoda-exoda"
+version = "0.1.0"
+description = "Βιβλία εσόδων-εξόδων από το myDATA της ΑΑΔΕ για ελεύθερους επαγγελματίες"
+readme = "README.md"
+license = {text = "AGPL-3.0-or-later"}
+requires-python = ">=3.11"
+dependencies = ["openpyxl>=3.1", "keyring>=24", "fastapi>=0.110", "uvicorn>=0.29",
+                "python-multipart>=0.0.9", "jinja2>=3.1", "psycopg[binary]>=3.2"]
+
+[project.scripts]
+esoda-exoda = "esoda_exoda.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+include = ["esoda_exoda*"]
+
+[tool.setuptools.package-data]
+"esoda_exoda.web" = ["templates/*.html", "static/*.css", "static/fonts/*.woff2", "static/fonts/OFL.txt"]
+"esoda_exoda" = ["migrations/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

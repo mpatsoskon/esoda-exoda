@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Η βάση δεν απαντά — Έσοδα-Έξοδα myDATA{% endblock %}
+{% block main %}
+<p class="eyebrow">ΤΙΠΟΤΑ ΔΕΝ ΕΓΙΝΕ</p>
+<h1 class="title">Η εφαρμογή δεν βρίσκει τα δεδομένα της</h1>
+<div class="msg m-warn"><span class="k">Γιατί</span>{{ error }}</div>
+<p class="gloss">Η βάση τρέχει σε Docker: <span class="mono">docker compose up -d</span> στον φάκελο
+της εφαρμογής, και ξαναφόρτωσε τη σελίδα.</p>
+{% endblock %}

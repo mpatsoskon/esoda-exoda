@@ -1,0 +1,31 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: esoda
+          POSTGRES_PASSWORD: esoda-dev
+          POSTGRES_DB: esoda_exoda_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U esoda" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      ESODA_EXODA_TEST_DSN: postgresql://esoda:esoda-dev@127.0.0.1:5432/esoda_exoda_test
+      PYTHON_KEYRING_BACKEND: keyring.backends.fail.Keyring
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e .[dev]
+      - run: python scripts/check_no_personal_data.py
+      - run: python -m pytest -q

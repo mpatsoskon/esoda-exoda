@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Νέος αντισυμβαλλόμενος' if cp_id is none else form.name or form.vat }} — Έσοδα-Έξοδα myDATA{% endblock %}
+{% macro select_codes(name, labels, selected) %}
+  <select id="{{ name }}" name="{{ name }}">
+    <option value=""{% if not selected %} selected{% endif %}>— καμία —</option>
+    {% for code, label in labels.items() %}
+      <option value="{{ code }}"{% if selected == code %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+    {% if selected and selected not in labels %}<option value="{{ selected }}" selected>{{ selected }}</option>{% endif %}
+  </select>
+{% endmacro %}
+{% block main %}
+<p class="eyebrow">ΑΝΤΙΣΥΜΒΑΛΛΟΜΕΝΟΣ · ΔΕΝ ΣΤΕΛΝΕΙ ΤΙΠΟΤΑ</p>
+<h1 class="title">{{ 'Νέος αντισυμβαλλόμενος' if cp_id is none else (form.name or form.vat) }}</h1>
+{% if error %}<div class="msg m-warn"><span class="k">Δεν αποθηκεύτηκε</span>{{ error }}</div>{% endif %}
+{% if notice %}<div class="msg{% if notice_warn %} m-warn{% endif %}"><span class="k">VIES</span>{{ notice }}</div>{% endif %}
+<form class="form" method="post" action="{{ '/counterparties' if cp_id is none else '/counterparties/' ~ cp_id }}">
+  <div class="block"><h2 class="h2">Ταυτότητα</h2>
+  <div class="fields">
+    <div class="f"><label for="vat">ΑΦΜ / VAT</label><input id="vat" name="vat" type="text" value="{{ form.vat }}" required></div>
+    <div class="f"><label for="country">Χώρα</label><input id="country" name="country" type="text" value="{{ form.country }}" required><span class="hint">ISO 2 γράμματα</span></div>
+    <div class="f"><label for="name">Επωνυμία</label><input id="name" name="name" type="text" value="{{ form.name }}" required></div>
+    <div class="f"><label for="postal_code">ΤΚ</label><input id="postal_code" name="postal_code" type="text" value="{{ form.postal_code }}"></div>
+    <div class="f"><label for="city">Πόλη</label><input id="city" name="city" type="text" value="{{ form.city }}"></div>
+    <div class="f"><label for="notes">Σημειώσεις</label><input id="notes" name="notes" type="text" value="{{ form.notes }}"></div>
+    <div class="f"><label><input type="checkbox" name="separate_totals"{% if form.separate_totals %} checked{% endif %}> Δικές του γραμμές υποσυνόλων στα ΕΣΟΔΑ</label></div>
+  </div></div>
+  <div class="block"><h2 class="h2">Προεπιλογή εξόδου <span class="count">όταν η ΑΑΔΕ δεν έχει χαρακτηρισμό</span></h2>
+  <div class="fields">
+    <div class="f"><label for="exp_category">Κατηγορία</label>{{ select_codes("exp_category", cfg.categories_for("expense"), form.exp_category) }}</div>
+    <div class="f"><label for="exp_e3">Κωδ. Ε3</label>{{ select_codes("exp_e3", cfg.e3_for("expense"), form.exp_e3) }}</div>
+    <div class="f"><label for="exp_deductible">Εκπίπτει το ΦΠΑ</label>
+      <select id="exp_deductible" name="exp_deductible">
+        {% for v, t in (("", "— άγνωστο —"), ("ΝΑΙ", "ΝΑΙ"), ("ΌΧΙ", "ΌΧΙ")) %}<option value="{{ v }}"{% if form.exp_deductible == v %} selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select></div>
+    <div class="f"><label for="exp_inv_type">Τύπος 14.x</label>
+      <select id="exp_inv_type" name="exp_inv_type">
+        {% for v, t in (("", "— όχι εξωτερικού —"), ("14.3", "14.3 ενδοκοινοτική λήψη"), ("14.4", "14.4 τρίτων χωρών")) %}<option value="{{ v }}"{% if form.exp_inv_type == v %} selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select><span class="hint">μόνο για χώρα εκτός GR</span></div>
+  </div></div>
+  <div class="block"><h2 class="h2">Προεπιλογή εσόδου</h2>
+  <div class="fields">
+    <div class="f"><label for="inc_category">Κατηγορία</label>{{ select_codes("inc_category", cfg.categories_for("income"), form.inc_category) }}</div>
+    <div class="f"><label for="inc_e3">Κωδ. Ε3</label>{{ select_codes("inc_e3", cfg.e3_for("income"), form.inc_e3) }}</div>
+  </div></div>
+  <div class="gobar"><button class="act" type="submit">Αποθήκευση</button>
+    <button class="act" type="submit" formaction="{{ '/counterparties/vies' if cp_id is none else '/counterparties/' ~ cp_id ~ '/vies' }}" formnovalidate>Συμπλήρωσε από VIES</button>
+    <a class="act" href="/counterparties">← Λίστα</a></div>
+</form>
+{% endblock %}

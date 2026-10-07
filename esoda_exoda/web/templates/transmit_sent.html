@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Δεν στάλθηκε' if r.error else 'Στάλθηκε' }} — Έσοδα-Έξοδα myDATA{% endblock %}
+
+{% block main %}
+<ol class="flow">
+  <li>Συμπλήρωσε το έξοδο</li>
+  <li>Έλεγξε πριν σταλεί</li>
+  <li class="gate">ΑΜΕΤΑΚΛΗΤΟ</li>
+  <li class="now">Στάλθηκε</li>
+</ol>
+
+{% if r.error %}
+  {# Άρνηση πριν φύγει τίποτα, ή rate limit που απορρίπτει πριν την επεξεργασία. #}
+  <p class="eyebrow">ΤΙΠΟΤΑ ΔΕΝ ΣΤΑΛΘΗΚΕ</p>
+  <h1 class="title">Η διαβίβαση δεν έγινε</h1>
+  <div class="msg m-warn"><span class="k">Γιατί</span>{{ r.error }}</div>
+  <div class="gobar">
+    <a class="act" href="/transmit">← Πίσω στη φόρμα</a>
+    <p class="guard">Κανένα παραστατικό δεν καταχωρήθηκε.</p>
+  </div>
+
+{% else %}
+  <p class="eyebrow">ΚΑΤΑΧΩΡΗΘΗΚΕ ΣΤΗΝ ΑΑΔΕ</p>
+  <h1 class="title">Διαβιβάστηκε</h1>
+  <p class="lede">Το MARK είναι το μόνο χερούλι για ενδεχόμενη ακύρωση. Γράφτηκε στη βάση
+  (<span class="mono">invoice_submission</span>).</p>
+
+  <div class="stamped">
+    <span class="lbl">MARK</span>
+    <span class="mk">{{ r.mark }}</span>
+    <span class="sub">UID {{ r.uid }}</span>
+  </div>
+
+  {% if r.log_error %}
+    <div class="msg m-stop"><span class="k">Η καταγραφή απέτυχε</span>{{ r.log_error }}</div>
+  {% endif %}
+  {% if r.refresh_error %}
+    {# Ώχρα και όχι κόκκινο: η διαβίβαση πέτυχε και τα σύνολα ξαναγράφονται με ένα
+       πάτημα. Το κόκκινο μένει για ό,τι δεν γυρίζει πίσω. #}
+    <div class="msg m-warn"><span class="k">Τα σύνολα δεν ξαναγράφτηκαν</span>{{ r.refresh_error }}</div>
+  {% endif %}
+
+  <div class="msg">
+    <span class="k">Ακύρωση</span>
+    Γίνεται μόνο από το portal του myDATA, με βάση αυτό το MARK.
+  </div>
+
+  <div class="gobar">
+    <a class="act" href="/transmit">Νέα διαβίβαση</a>
+    <a class="act" href="/">Κατάσταση</a>
+  </div>
+{% endif %}
+{% endblock %}

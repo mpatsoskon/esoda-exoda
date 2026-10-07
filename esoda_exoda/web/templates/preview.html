@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Έλεγξε πριν σταλεί — {{ rows | length | parastatika }}{% endblock %}
+
+{% block main %}
+<ol class="flow">
+  <li>Διάλεξε παραστατικά</li>
+  <li class="now">Έλεγξε πριν σταλεί</li>
+  <li class="gate">ΑΜΕΤΑΚΛΗΤΟ</li>
+  <li>Στάλθηκε</li>
+</ol>
+
+<p class="eyebrow">ΤΟ ΤΕΛΕΥΤΑΙΟ ΒΗΜΑ ΠΟΥ ΓΥΡΙΖΕΙ ΠΙΣΩ</p>
+<h1 class="title">Έλεγξε πριν σταλεί —
+  <span class="num">{{ rows | length | parastatika }}, {{ "%02d"|format(month) }}/{{ year }}</span></h1>
+<p class="lede">Η νέα υποβολή ακυρώνει την προηγούμενη. Ό,τι αντικαθίσταται είναι σημειωμένο.</p>
+
+{% set replaced = rows | selectattr('replaces') | list %}
+
+<div class="block">
+  <h2 class="h2">Τι θα καταχωρηθεί</h2>
+  <div class="scroll">
+    <table class="reg">
+      <thead><tr>
+        <th class="given">ΑΦΜ</th><th class="given">ΕΠΩΝΥΜΙΑ</th>
+        <th class="seam r">ΠΟΣΟ Ε3</th><th>ΚΩΔ. Ε3</th><th>ΚΑΤΗΓΟΡΙΑ</th><th class="r">ΦΠΑ</th>
+        <th>ΙΣΧΥΩΝ ΧΑΡΑΚΤΗΡΙΣΜΟΣ</th>
+      </tr></thead>
+      {# Η μία κίνηση της σελίδας: το strike-through στον κωδικό που παύει να ισχύει.
+         Είναι το ένα πράγμα που πρέπει να προσέξεις πριν πατήσεις. #}
+      <tbody class="play">
+        {% for r in rows %}
+          <tr style="--i:{{ loop.index0 }}">
+            <td class="given code aade">{{ r.doc.issuer_vat }}</td>
+            {% if r.doc.issuer_name %}<td class="given">{{ r.doc.issuer_name }}</td>
+            {% else %}<td class="given anon">χωρίς επωνυμία στο RequestDocs</td>{% endif %}
+            <td class="seam num r">{{ r.e3_amount | eur }}</td>
+            <td class="code">{{ r.sel.e3_type }}</td>
+            <td class="code">{{ r.sel.category }}</td>
+            {% if r.vat is none %}
+              <td class="hint">— ανά γραμμή, χωρίς ποσό ΦΠΑ</td>
+            {% else %}
+              <td class="num r">{{ r.vat | eur }}</td>
+            {% endif %}
+            <td class="repl">
+              {% if r.replaces %}
+                <b class="alarm">ΑΝΤΙΚΑΘΙΣΤΑΤΑΙ</b>
+                <span class="old">{% for l in r.replaces %}{% if not loop.first %}, {% endif %}{{ l.e3_type }} / {{ l.category }}{% endfor %}</span>
+                <span class="arrow">→</span>
+                <span class="new">{{ r.sel.e3_type }} / {{ r.sel.category }}</span>
+              {% else %}
+                <span class="keep">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if replaced %}
+    <div class="msg m-stop">
+      <span class="k">{{ replaced | length | parastatika }} με χαρακτηρισμό που ισχύει</span>
+      Στέλνοντας, ο παλιός κωδικός παύει να ισχύει και τη θέση του παίρνει ο νέος.
+      Δεν προστίθεται δεύτερος χαρακτηρισμός — αντικαθίσταται ο πρώτος.
+    </div>
+  {% endif %}
+</div>
+
+<div class="block">
+  <h2 class="h2">Τα έγγραφα που θα διαβιβαστούν
+    <span class="count">{{ documents | length }} {{ 'έγγραφο' if documents | length == 1 else 'έγγραφα' }},
+      {{ documents | length }} POST</span></h2>
+  {% for d in documents %}
+    <details>
+      <summary>{{ d.title }} <span class="count">({{ d.count | parastatika }})</span></summary>
+<pre>{{ d.xml }}</pre>
+    </details>
+  {% endfor %}
+</div>
+
+{% if warnings %}
+<div class="msg m-warn"><span class="k">Έλεγξε πριν στείλεις</span>
+  <ul>{% for vat, f in warnings %}<li><span class="mono">{{ f.mark }}</span> · ΑΦΜ {{ vat }} — {{ f.message }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<form method="post" action="/classify/send">
+  <input type="hidden" name="xml_per_invoice" value="{{ xml_per_invoice }}">
+  <input type="hidden" name="xml_per_line" value="{{ xml_per_line }}">
+  <input type="hidden" name="year" value="{{ year }}">
+  <input type="hidden" name="month" value="{{ month }}">
+  {% for r in remember %}<input type="hidden" name="remember" value="{{ r }}">{% endfor %}
+  <div class="gobar">
+    {% if warnings %}<label class="ack"><input type="checkbox" name="ack" required> Το έλεγξα — προχώρα</label>{% endif %}
+    <button class="send" type="submit">Υποβολή χαρακτηρισμών<small>{{ rows | length | parastatika }} ·
+      {{ "%02d"|format(month) }}/{{ year }} · {{ documents | length }} POST</small></button>
+    <a class="act" href="/classify?year={{ year }}&amp;month={{ month }}">← Πίσω στην επιλογή</a>
+    <p class="guard">Μετά από αυτό το κουμπί <b>δεν υπάρχει επαναφορά</b> — μόνο νέα
+    υποβολή που ακυρώνει αυτή.</p>
+  </div>
+</form>
+{% endblock %}

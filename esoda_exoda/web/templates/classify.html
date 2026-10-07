@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Χαρακτηρισμός {{ "%02d"|format(month) }}/{{ year }} — Έσοδα-Έξοδα myDATA{% endblock %}
+
+{# Το κενό option ως selected είναι σκόπιμο: χωρίς αυτό ο browser υποβάλλει το πρώτο
+   της λίστας, δηλαδή κωδικό που δεν διάλεξε κανείς. Ισχύει και για κωδικό εκτός
+   λίστας, π.χ. χαρακτηρισμένο από το portal: κανένα option δεν θα τον έφερε. #}
+{% macro codes(name, labels, selected, label) %}
+  <select name="{{ name }}" aria-label="{{ label }}"{% if selected not in labels %} class="unset"{% endif %}>
+    {% if selected not in labels %}<option value="" selected>— διάλεξε —</option>{% endif %}
+    {% for code, text in labels | dictsort %}
+      <option value="{{ code }}"{% if code == selected %} selected{% endif %}>{{ text }}</option>
+    {% endfor %}
+  </select>
+{% endmacro %}
+
+{% macro name_cell(e) %}
+  {% if e.name %}<td class="given">{{ e.name }}</td>
+  {% else %}<td class="given anon">χωρίς επωνυμία στο RequestDocs</td>{% endif %}
+{% endmacro %}
+
+{% macro facts(e) %}
+  <td class="given code aade">{{ e.doc.issuer_vat }}</td>
+  {{ name_cell(e) }}
+  <td class="given code">{{ e.doc.series }}/{{ e.doc.aa }}</td>
+  <td class="given num">{{ e.doc.date.strftime('%d/%m/%Y') }}</td>
+  <td class="given num r">{{ e.doc.net | eur }}</td>
+  <td class="given num r">{{ e.doc.vat | eur }}</td>
+{% endmacro %}
+
+{% macro row(e, with_current) %}
+  <tr>
+    <td class="given"><input type="checkbox" name="mark" value="{{ e.doc.mark }}"
+        aria-label="Επιλογή MARK {{ e.doc.mark }}"></td>
+    {{ facts(e) }}
+    {% if with_current %}
+      {# Με δύο κωδικούς Ε3 φαίνονται και οι δύο, ώστε να δεις τι θα αντικαταστήσεις. #}
+      <td class="given code aade inforce">
+        {%- for l in e.current %}<span>{{ l.e3_type }}<br>{{ l.category }}<br><em>{{ l.value | eur }} €</em></span>{% endfor -%}
+      </td>
+    {% endif %}
+    {# Οι τρεις αποφάσεις σε ένα κελί, κολλημένο δεξιά: σε πίνακα 8 στηλών που
+       κυλά οριζόντια, ό,τι πρέπει να πατήσεις δεν επιτρέπεται να βγει εκτός οθόνης. #}
+    <td class="seam choose">
+      {{ codes("e3_" ~ e.doc.mark, cfg.e3_for("expense"), e.e3, "Κωδικός Ε3") }}
+      {{ codes("category_" ~ e.doc.mark, cfg.categories_for("expense"), e.category, "Κατηγορία") }}
+      <label class="recall"><input type="checkbox" name="remember"
+        value="{{ e.doc.mark }}|{{ e.doc.issuer_vat }}"> θυμήσου</label>
+    </td>
+  </tr>
+{% endmacro %}
+
+{% macro head(with_current) %}
+  <tr>
+    <th class="given"><span class="sr">Επιλογή</span></th>
+    <th class="given">ΑΦΜ</th><th class="given">ΕΠΩΝΥΜΙΑ</th><th class="given">ΣΕΙΡΑ/ΑΑ</th>
+    <th class="given">ΗΜ/ΝΙΑ</th><th class="given r">ΚΑΘΑΡΗ</th><th class="given r">ΦΠΑ</th>
+    {% if with_current %}<th class="given">ΙΣΧΥΕΙ ΤΩΡΑ</th>{% endif %}
+    <th class="seam choose">Η ΑΠΟΦΑΣΗ ΣΟΥ — ΚΩΔ. Ε3, ΚΑΤΗΓΟΡΙΑ</th>
+  </tr>
+{% endmacro %}
+
+{% macro why_out_of_scope(e) %}Εκτός εύρους ({{ e.reason }}) — χαρακτήρισέ το από το portal.{% endmacro %}
+{% macro why_other_recipient(e) %}Λήπτης είναι το ΑΦΜ {{ e.doc.counterpart_vat }}, όχι εμείς — δεν μας αφορά.{% endmacro %}
+
+{% macro why_table(items, why) %}
+  <div class="scroll">
+    <table class="reg">
+      <thead><tr>
+        <th class="given">&nbsp;</th>
+        <th class="given">ΑΦΜ</th><th class="given">ΕΠΩΝΥΜΙΑ</th><th class="given">ΣΕΙΡΑ/ΑΑ</th>
+        <th class="given">ΗΜ/ΝΙΑ</th><th class="given r">ΚΑΘΑΡΗ</th><th class="given r">ΦΠΑ</th>
+        <th class="seam">ΓΙΑΤΙ</th>
+      </tr></thead>
+      <tbody>
+        {% for e in items %}
+          <tr><td class="given num">—</td>{{ facts(e) }}<td class="seam why">{{ why(e) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endmacro %}
+
+{% block main %}
+<ol class="flow">
+  <li class="now">Διάλεξε παραστατικά</li>
+  <li>Έλεγξε πριν σταλεί</li>
+  <li class="gate">ΑΜΕΤΑΚΛΗΤΟ</li>
+  <li>Στάλθηκε</li>
+</ol>
+
+<p class="eyebrow">ΠΑΡΑΣΤΑΤΙΚΑ ΠΟΥ ΕΛΑΒΕΣ</p>
+<h1 class="title">Χαρακτηρισμός εξόδων <span class="num">{{ "%02d"|format(month) }}/{{ year }}</span></h1>
+<p class="lede">Οι ομάδες βγαίνουν από τα δεδομένα: τι δεν έχει χαρακτηριστεί, τι
+ισχύει ήδη, τι δεν χαρακτηρίζεται από εδώ.</p>
+
+<form method="post" action="/classify/preview">
+  <input type="hidden" name="year" value="{{ year }}">
+  <input type="hidden" name="month" value="{{ month }}">
+
+  <div class="block">
+    <h2 class="h2">Αχαρακτήριστα
+      {% if unclassified %}<span class="count">{{ unclassified | length | parastatika }} ·
+        {{ unclassified | sum(attribute='doc.net') | eur }} € καθαρή</span>{% endif %}</h2>
+    {% if unclassified %}
+      <div class="scroll">
+        <table class="reg">
+          <thead>{{ head(false) }}</thead>
+          <tbody>{% for e in unclassified %}{{ row(e, false) }}{% endfor %}</tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">Κανένα αχαρακτήριστο παραστατικό αυτόν τον μήνα.</p>
+    {% endif %}
+  </div>
+
+  <div class="block">
+    <h2 class="h2">Χαρακτηρισμένα
+      {% if classified %}<span class="count">{{ classified | length | parastatika }} ·
+        νέα υποβολή αντικαθιστά την προηγούμενη</span>{% endif %}</h2>
+    {% if classified %}
+      <div class="scroll">
+        <table class="reg">
+          <thead>{{ head(true) }}</thead>
+          <tbody>{% for e in classified %}{{ row(e, true) }}{% endfor %}</tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">Κανένας χαρακτηρισμός δεν ισχύει ακόμη για αυτόν τον μήνα.</p>
+    {% endif %}
+  </div>
+
+  <div class="block">
+    <h2 class="h2">Εκτός εύρους
+      {% if skipped %}<span class="count">{{ skipped | length | parastatika }}</span>{% endif %}</h2>
+    {% if skipped %}
+      {{ why_table(skipped, why_out_of_scope) }}
+    {% else %}
+      <p class="empty">Κανένα.</p>
+    {% endif %}
+  </div>
+
+  <div class="block">
+    <h2 class="h2">Άλλος λήπτης
+      {% if other_recipient %}<span class="count">{{ other_recipient | length | parastatika }}</span>{% endif %}</h2>
+    {% if other_recipient %}
+      {{ why_table(other_recipient, why_other_recipient) }}
+      <p class="aside">Φαίνεται εδώ αντί να εξαφανιστεί: έξοδο που δεν φαίνεται
+      πουθενά είναι έξοδο που δεν χαρακτηρίζεται ποτέ.</p>
+    {% else %}
+      <p class="empty">Κανένα.</p>
+    {% endif %}
+  </div>
+
+  <div class="gobar">
+    <button class="act" type="submit">Έλεγξε τα επιλεγμένα →</button>
+    <p class="guard">Το επόμενο βήμα χτίζει το XML και δείχνει τι αντικαθίσταται.
+    <b>Δεν στέλνει.</b></p>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Δεν στάλθηκε' if r.error else 'Στάλθηκε' }} — Έσοδα-Έξοδα myDATA{% endblock %}
+
+{% block main %}
+<ol class="flow">
+  <li>Διάλεξε παραστατικά</li>
+  <li>Έλεγξε πριν σταλεί</li>
+  <li class="gate">ΑΜΕΤΑΚΛΗΤΟ</li>
+  <li class="now">Στάλθηκε</li>
+</ol>
+
+{% if r.error %}
+  {# Άρνηση πριν φύγει τίποτα: καμία καταχώρηση, τίποτα αμετάκλητο. #}
+  <p class="eyebrow">ΤΙΠΟΤΑ ΔΕΝ ΣΤΑΛΘΗΚΕ</p>
+  <h1 class="title">Η υποβολή δεν έγινε</h1>
+  <div class="msg m-warn">
+    <span class="k">Γιατί</span>
+    {{ r.error }}
+  </div>
+  <div class="gobar">
+    <a class="act" href="/classify?year={{ year }}&amp;month={{ month }}">← Πίσω στην επιλογή</a>
+    <p class="guard">Κανένας χαρακτηρισμός δεν καταχωρήθηκε.</p>
+  </div>
+
+{% else %}
+  <p class="eyebrow">ΚΑΤΑΧΩΡΗΘΗΚΕ ΣΤΗΝ ΑΑΔΕ</p>
+  <h1 class="title">Υποβλήθηκαν
+    <span class="num">{{ r.succeeded | length | parastatika }}</span></h1>
+  <p class="lede">Το MARK χαρακτηρισμού είναι το μόνο χερούλι για έλεγχο. Η υποβολή
+  καταγράφηκε στη βάση (<span class="mono">classification_submission</span>).</p>
+
+  {# Εδώ η σφραγίδα είναι στη θέση της: αποτύπωμα που έμεινε, όχι control. #}
+  {% for s in r.succeeded %}
+    <div class="stamped">
+      <span class="lbl">MARK ΧΑΡΑΚΤΗΡΙΣΜΟΥ</span>
+      <span class="mk">{{ s.classification_mark }}</span>
+      <span class="sub">παραστατικό {{ s.invoice_mark }}</span>
+    </div>
+  {% endfor %}
+
+  {% if r.failed %}
+    <div class="block">
+      <h2 class="h2">Απορρίφθηκαν <span class="count">{{ r.failed | length | parastatika }}</span></h2>
+      <div class="scroll">
+        <table class="reg">
+          <thead><tr>
+            <th class="given">ΠΑΡΑΣΤΑΤΙΚΟ</th><th class="given">ΚΑΤΑΣΤΑΣΗ</th>
+            <th class="seam">ΤΙ ΕΙΠΕ Η ΑΑΔΕ</th>
+          </tr></thead>
+          <tbody>
+            {% for f in r.failed %}
+              <tr>
+                <td class="given code aade">{{ f.invoice_mark }}</td>
+                <td class="given code unk">{{ f.status }}</td>
+                <td class="seam why">
+                  {%- for e in f.errors %}{% if not loop.first %}<br>{% endif %}
+                    {% if e.code %}<span class="mono">{{ e.code }}</span> — {% endif %}{{ e.message }}
+                  {% endfor -%}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="aside">Αυτά δεν καταχωρήθηκαν. Διόρθωσε τον χαρακτηρισμό και ξαναστείλε
+      μόνο αυτά — τα επιτυχημένα από πάνω δεν ξαναστέλνονται.</p>
+    </div>
+  {% endif %}
+
+  {% for w in r.warnings or [] %}
+    <div class="msg m-warn"><span class="k">Πρόσεξε</span>{{ w }}</div>
+  {% endfor %}
+
+  {% for e in r.send_errors or [] %}
+    {# Αίτημα που έφυγε χωρίς διαβάσιμη απάντηση: ούτε επιτυχία ούτε αποτυχία. #}
+    <div class="msg m-stop"><span class="k">Αίτημα σε άγνωστη κατάσταση</span>{{ e }}</div>
+  {% endfor %}
+
+  {% if r.log_error %}
+    <div class="msg m-stop"><span class="k">Η καταγραφή απέτυχε</span>{{ r.log_error }}</div>
+  {% endif %}
+
+  {% if r.refresh_error %}
+    {# Ώχρα και όχι κόκκινο: η υποβολή πέτυχε και τα σύνολα ξαναγράφονται με ένα
+       πάτημα. Το κόκκινο μένει για ό,τι δεν γυρίζει πίσω. #}
+    <div class="msg m-warn"><span class="k">Τα σύνολα δεν ξαναγράφτηκαν</span>{{ r.refresh_error }}</div>
+  {% endif %}
+
+  <div class="gobar">
+    <a class="act" href="/classify?year={{ year }}&amp;month={{ month }}">Πίσω στον μήνα</a>
+    <a class="act" href="/">Κατάσταση</a>
+    <p class="guard">Τυχόν ακύρωση γίνεται μόνο από το portal του myDATA, με βάση το
+    MARK του παραστατικού.</p>
+  </div>
+{% endif %}
+{% endblock %}

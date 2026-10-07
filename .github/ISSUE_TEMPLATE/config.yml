@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ερώτηση χρήσης
+    url: https://github.com/mpatsoskon/esoda-exoda/discussions
+    about: Για ερωτήσεις, χρησιμοποίησε τα Discussions.

@@ -1,0 +1,15 @@
+name: Νέα περίπτωση επαγγελματία
+description: Η δραστηριότητά σου χρειάζεται κάτι που το εργαλείο δεν καλύπτει
+labels: [new-case]
+body:
+  - type: markdown
+    attributes:
+      value: "**Μη γράψεις πραγματικούς ΑΦΜ, MARK, ποσά ή επωνυμίες.**"
+  - type: textarea
+    id: activity
+    attributes: {label: Δραστηριότητα, description: "Π.χ. πώληση αγαθών, λιανική, έσοδα αλλοδαπής."}
+    validations: {required: true}
+  - type: textarea
+    id: needs
+    attributes: {label: Τι λείπει, description: "Τύποι παραστατικών, κωδικοί Ε3, χαρακτηρισμοί, κατηγορίες ΦΠΑ."}
+    validations: {required: true}

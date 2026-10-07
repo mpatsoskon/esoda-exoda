@@ -1,0 +1,15 @@
+name: esoda-exoda
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: esoda
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-esoda-dev}
+      POSTGRES_DB: esoda_exoda
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - esoda_pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/10-test-db.sql:ro
+volumes:
+  esoda_pgdata:

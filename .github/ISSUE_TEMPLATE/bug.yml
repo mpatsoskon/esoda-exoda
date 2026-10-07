@@ -1,0 +1,21 @@
+name: Σφάλμα
+description: Κάτι δεν δουλεύει όπως περιμένεις
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "**Μη γράψεις πραγματικούς ΑΦΜ, MARK, ποσά ή επωνυμίες.** Χρησιμοποίησε ψεύτικα."
+  - type: textarea
+    id: what
+    attributes: {label: Τι έγινε, description: "Τι έκανες, τι περίμενες, τι είδες."}
+    validations: {required: true}
+  - type: dropdown
+    id: env
+    attributes: {label: Περιβάλλον myDATA, options: [dev, production]}
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes: {label: Έκδοση / commit, description: "git rev-parse --short HEAD"}
+  - type: textarea
+    id: logs
+    attributes: {label: Μηνύματα σφάλματος, render: text}

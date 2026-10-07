@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Δεν ανανεώθηκαν' if r.error else 'Τα βιβλία ανανεώθηκαν' }} — Έσοδα-Έξοδα myDATA{% endblock %}
+
+{% block main %}
+{# Καμία λωρίδα πορείας και κανένα κόκκινο: η ανανέωση είναι μόνο διάβασμα από την
+   ΑΑΔΕ. Τίποτα δεν διαβιβάστηκε, οπότε τίποτα δεν είναι αμετάκλητο. #}
+{% if r.error %}
+  <p class="eyebrow">ΤΑ ΒΙΒΛΙΑ ΕΜΕΙΝΑΝ ΩΣ ΗΤΑΝ</p>
+  <h1 class="title">Η ανανέωση δεν έγινε</h1>
+  <div class="msg m-warn"><span class="k">Γιατί</span>{{ r.error }}</div>
+  <div class="gobar">
+    <a class="act" href="/">← Πίσω στην κατάσταση</a>
+    <p class="guard">Η βάση έμεινε όπως ήταν.</p>
+  </div>
+
+{% else %}
+  {% set esoda = r.synola.get('ΕΣΟΔΑ') or {} %}
+  {% set exoda = r.synola.get('ΕΞΟΔΑ') or {} %}
+  <p class="eyebrow">ΔΙΑΒΑΣΜΑ ΑΠΟ ΤΗΝ ΑΑΔΕ — ΤΙΠΟΤΑ ΔΕΝ ΣΤΑΛΘΗΚΕ</p>
+  <h1 class="title">Τα βιβλία ανανεώθηκαν <span class="num">{{ year }}</span></h1>
+  <p class="lede">Η βάση έχει τώρα ό,τι επέστρεψε η ΑΑΔΕ για το εύρος
+  <span class="mono">{{ r.date_from }}</span> – <span class="mono">{{ r.date_to }}</span>:
+  {{ r.new_invoices }} νέα παραστατικά, {{ r.seen_invoices }} που υπήρχαν,
+  {{ r.new_counterparties }} νέοι αντισυμβαλλόμενοι.</p>
+
+  <div class="block">
+    <h2 class="h2">Σύνολα χρονιάς</h2>
+    <div class="scroll">
+      <table class="reg">
+        <thead><tr>
+          <th class="given">ΒΙΒΛΙΟ</th><th class="given r">ΓΡΑΜΜΕΣ</th>
+          <th class="r">ΚΑΘΑΡΗ ΑΞΙΑ</th><th class="r">ΦΠΑ</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="given">Έσοδα</td><td class="given num r">{{ esoda.rows or 0 }}</td>
+              <td class="num r">{{ (esoda.net or 0) | eur }} €</td>
+              <td class="num r">{{ (esoda.vat or 0) | eur }} €</td></tr>
+          <tr><td class="given">Έξοδα</td><td class="given num r">{{ exoda.rows or 0 }}</td>
+              <td class="num r">{{ (exoda.net or 0) | eur }} €</td>
+              <td class="num r">{{ (exoda.vat or 0) | eur }} €</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if r.flagged %}
+    {# Ώχρα: ο χαρακτηρισμός αυτών των ΑΦΜ δεν βρέθηκε στο config, οπότε οι γραμμές
+       τους είναι σημειωμένες στο Excel. Δουλειά που περιμένει, όχι σφάλμα. #}
+    <div class="msg m-warn">
+      <span class="k">{{ r.flagged | length }} ΑΦΜ χωρίς χαρακτηρισμό στο config</span>
+      Οι γραμμές τους γράφτηκαν σημειωμένες:
+      {% for afm in r.flagged %}<span class="mono">{{ afm }}</span>{% if not loop.last %}, {% endif %}{% endfor %}.
+      Δώσε τους προεπιλογή στους <a href="/counterparties">Αντισυμβαλλόμενους</a> για να
+      προτείνεται μόνη της.
+    </div>
+  {% endif %}
+
+  {% if r.months %}
+    <div class="block">
+      <h2 class="h2">Μηνιαία φύλλα που γράφτηκαν
+        <span class="count">{{ r.months | length }} από 12</span></h2>
+      <div class="scroll">
+        <table class="reg">
+          <thead><tr>
+            <th class="given">ΜΗΝΑΣ</th><th class="given r">ΕΣΟΔΑ</th>
+            <th class="r">ΕΞΟΔΑ</th>
+          </tr></thead>
+          <tbody>
+            {% for m, c in r.months.items() | sort %}
+              <tr>
+                <td class="given num">{{ "%02d"|format(m|int) }}/{{ year }}</td>
+                <td class="given num r">{{ c.income }}</td>
+                <td class="num r">{{ c.expenses }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <p class="empty">Κανένα παραστατικό για το {{ year }} — δεν γράφτηκε μηνιαίο φύλλο.</p>
+  {% endif %}
+
+  {% if r.synola.get('ΦΠΑ') %}
+    <div class="block">
+      <h2 class="h2">ΦΠΑ ανά μήνα
+        <span class="count">η διαφορά είναι βιβλία − επίσημο</span></h2>
+      <div class="scroll">
+        <table class="reg">
+          <thead><tr>
+            <th class="given">ΜΗΝΑΣ</th><th class="given r">ΦΠΑ ΕΚΡΟΩΝ</th>
+            <th class="given r">ΕΚΠΙΠΤΟΜΕΝΟ</th><th class="given r">ΥΠΟΛΟΙΠΟ</th>
+            <th class="official r">ΕΠΙΣΗΜΟ ΕΚΡΟΩΝ (333)</th>
+            <th class="r aade">ΕΠΙΣΗΜΟ ΕΚΠΙΠΤΟΜΕΝΟ (381–386)</th><th class="r">ΔΙΑΦΟΡΑ</th>
+          </tr></thead>
+          <tbody>
+            {% for v in r.synola['ΦΠΑ'] %}
+              <tr>
+                <td class="given num">{{ "%02d"|format(v.month) }}</td>
+                <td class="given num r">{{ v.out_vat | eur }}</td>
+                <td class="given num r">{{ v.in_vat_deductible | eur }}</td>
+                <td class="given num r">{{ v.balance | eur }}</td>
+                <td class="official num r aade">{{ v.official_out_vat | eur }}</td>
+                <td class="num r aade">{{ v.official_deductible | eur }}</td>
+                <td class="num r{% if v.diff %} unk{% endif %}">{{ v.diff | eur }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if r.synola.get('ΦΠΑ_λοιποί_κωδικοί') %}
+        <div class="msg m-warn">
+          <span class="k">Κωδικοί που δεν αναγνωρίστηκαν</span>
+          Το RequestVatInfo έφερε κωδικούς εκτός των 333 και 381–386:
+          <span class="mono">{{ r.synola['ΦΠΑ_λοιποί_κωδικοί'] }}</span>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="gobar">
+    <a class="act" href="/">Κατάσταση</a>
+    <a class="act" href="/classify?period={{ year }}-{{ "%02d"|format(month) }}">Χαρακτηρισμός εξόδων</a>
+    <a class="act" href="/export/{{ year }}.xlsx">Κατέβασε ΣΥΝΟΛΑ {{ year }}.xlsx</a>
+  </div>
+{% endif %}
+{% endblock %}

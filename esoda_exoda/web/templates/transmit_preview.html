@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Έλεγξε πριν σταλεί — {{ label }}{% endblock %}
+
+{% block main %}
+<ol class="flow">
+  <li>Συμπλήρωσε το έξοδο</li>
+  <li class="now">Έλεγξε πριν σταλεί</li>
+  <li class="gate">ΑΜΕΤΑΚΛΗΤΟ</li>
+  <li>Στάλθηκε</li>
+</ol>
+
+<p class="eyebrow">ΤΟ ΤΕΛΕΥΤΑΙΟ ΒΗΜΑ ΠΟΥ ΓΥΡΙΖΕΙ ΠΙΣΩ</p>
+<h1 class="title">Έλεγξε πριν σταλεί</h1>
+<p class="lede">Ένα παραστατικό που εκδίδεις εσύ. Διάβασε τα ποσά όπως διαβάστηκαν —
+η καθαρή αξία δέχεται και ελληνική και απλή μορφή.</p>
+
+<div class="block">
+  <div class="scroll">
+    <table class="reg">
+      <tbody>
+        <tr><th class="given">ΕΙΔΟΣ</th><td class="seam">{{ label }}</td></tr>
+        <tr><th class="given">ΗΜ/ΝΙΑ ΕΚΔΟΣΗΣ</th>
+            <td class="seam num">{{ issue_date.strftime('%d/%m/%Y') }}</td></tr>
+        {# Η ηχώ της τιμής: εδώ φαίνεται πώς διαβάστηκε ό,τι πληκτρολόγησες. #}
+        <tr><th class="given">ΚΑΘΑΡΗ ΑΞΙΑ</th>
+            <td class="seam num"><b>{{ net | eur }} €</b></td></tr>
+        {% if vat is not none %}
+          <tr><th class="given">ΠΛΑΣΜΑΤΙΚΟ ΦΠΑ 24%</th>
+              <td class="seam num">{{ vat | eur }} € — χρέωση και ισόποση έκπτωση</td></tr>
+        {% else %}
+          <tr><th class="given">ΦΠΑ</th>
+              <td class="seam">{% if vat_category == "8" %}χωρίς ΦΠΑ{% else %}{{ 'εκπίπτει' if deductible else 'δεν εκπίπτει' }}{% endif %}</td></tr>
+        {% endif %}
+        <tr><th class="given">ΣΕΙΡΑ / ΑΑ</th>
+            <td class="seam code">{{ series }} / {{ aa }}</td></tr>
+        {% if supplier %}
+          <tr><th class="given">ΠΡΟΜΗΘΕΥΤΗΣ</th>
+              <td class="seam">{{ supplier.name }} · VAT <span class="mono">{{ supplier.vat }}</span>
+                · {{ supplier.city }} {{ supplier.postal_code }}, {{ supplier.country }}</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="block">
+  <h2 class="h2">Το έγγραφο που θα διαβιβαστεί <span class="count">ένα POST</span></h2>
+  <details>
+    <summary>{{ label }}</summary>
+<pre>{{ xml }}</pre>
+  </details>
+</div>
+
+{% if warnings %}
+<div class="msg m-warn"><span class="k">Έλεγξε πριν στείλεις</span>
+  <ul>{% for f in warnings %}<li>{{ f.message }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<form method="post" action="/transmit/send">
+  <input type="hidden" name="xml" value="{{ xml }}">
+  <input type="hidden" name="year" value="{{ issue_date.year }}">
+  <div class="gobar">
+    {% if warnings %}<label class="ack"><input type="checkbox" name="ack" required> Το έλεγξα — προχώρα</label>{% endif %}
+    <button class="send" type="submit">Διαβίβαση στο myDATA<small>{{ net | eur }} € ·
+      {{ issue_date.strftime('%d/%m/%Y') }} · Σειρά {{ series }} / ΑΑ {{ aa }}</small></button>
+    <a class="act" href="/transmit">← Πίσω στη φόρμα</a>
+    <p class="guard">Μετά από αυτό το κουμπί <b>δεν υπάρχει επαναφορά</b> — τυχόν
+    ακύρωση γίνεται μόνο από το portal, με βάση το MARK.</p>
+  </div>
+</form>
+{% endblock %}

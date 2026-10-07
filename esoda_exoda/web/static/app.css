@@ -1,0 +1,313 @@
+/* ABOUTME: Ένα stylesheet για όλες τις οθόνες του τοπικού UI.
+   ABOUTME: Τα κεφαλαία γράφονται άτονα στα templates, ποτέ με text-transform. */
+
+/* Τα ελληνικά κεφαλαία δεν παίρνουν τόνο. Το text-transform: uppercase δεν
+   εγγυάται την αφαίρεσή του σε κάθε browser, οπότε τα κεφαλαία γράφονται
+   κυριολεκτικά στο markup. */
+
+/* Οι γραμματοσειρές ζουν στο static/fonts: η εφαρμογή τρέχει τοπικά και δεν
+   επιτρέπεται να δείχνει αλλιώς όταν δεν υπάρχει δίκτυο. Το Sans είναι variable
+   (ένα αρχείο ανά υποσύνολο για όλα τα βάρη 100-700). */
+@font-face{
+  font-family:'IBM Plex Sans';font-style:normal;font-weight:100 700;font-display:swap;
+  src:url('/static/fonts/plex-sans-latin-var.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,
+    U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,
+    U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'IBM Plex Sans';font-style:normal;font-weight:100 700;font-display:swap;
+  src:url('/static/fonts/plex-sans-greek-var.woff2') format('woff2');
+  unicode-range:U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF;
+}
+/* ΠΡΟΣΟΧΗ: το IBM Plex Mono ΔΕΝ έχει ελληνικά γλυφά. Γι' αυτό το --mono μπαίνει
+   μόνο σε ψηφία, κωδικούς και αναγνωριστικά (MARK, ΑΦΜ, ποσά, E3_*, ημερομηνίες)·
+   κάθε ελληνική λέξη πάει στο --sans, αλλιώς μισή λέξη έρχεται από fallback. */
+@font-face{
+  font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;
+  src:url('/static/fonts/plex-mono-latin-400.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Mono';font-style:normal;font-weight:600;font-display:swap;
+  src:url('/static/fonts/plex-mono-latin-600.woff2') format('woff2');
+}
+
+:root{
+  --ledger:#E7EAE4;      /* χαρτί βιβλίου — ό,τι κρατά η ΑΑΔΕ */
+  --paper:#FBFBF9;       /* χαρτί εργασίας — ό,τι αποφασίζεις */
+  --ink:#16211E;
+  --ink-2:#5A6862;
+  --rule:#C3CCC4;
+  --aade:#1F4E6B;
+  --stamp:#9B1B30;       /* μόνο για το αμετάκλητο */
+  --shell:#D6DCD6;
+  --warn:#8A5A08;        /* λείπει κάτι, ή θέλει την προσοχή σου */
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ledger:#1B231F; --paper:#101512; --ink:#E4EAE4; --ink-2:#8E9C94;
+    --rule:#35443B; --aade:#7FB4D4; --stamp:#E5556E; --shell:#070908;
+    --warn:#D8A73E;
+  }
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{color-scheme:light dark}
+body{margin:0;background:var(--shell);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%}
+
+/* ══ ΣΚΕΛΕΤΟΣ ══ */
+.app{display:grid;grid-template-columns:252px minmax(0,1fr);
+  max-width:1460px;margin:0 auto;background:var(--paper);min-height:100vh}
+/* η ραφή: η ίδια διάτρηση καρμπόν που χωρίζει τις στήλες των πινάκων. Ζωγραφίζεται
+   ως background και όχι ως ::after, γιατί το overflow-y του sidebar θα την έκοβε. */
+.side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+  background:repeating-linear-gradient(to bottom,var(--rule) 0 2px,transparent 2px 6px)
+             right top / 3px 100% no-repeat,
+             var(--ledger);
+  border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;padding:20px 0 18px}
+.main{padding:28px 32px 76px;min-width:0}
+
+.brand{padding:0 18px 18px;border-bottom:1px solid var(--rule)}
+.brand .nm{font-weight:600;font-size:16px;letter-spacing:-.01em;margin:0 0 9px}
+.brand dl{margin:0;font-size:11.5px;line-height:1.7;
+  display:grid;grid-template-columns:auto 1fr;gap:0 9px}
+.brand dt{color:var(--ink-2)}
+.brand dd{margin:0;color:var(--ink)}
+
+.navlabel{font-size:10px;font-weight:600;letter-spacing:.14em;color:var(--ink-2);
+  padding:16px 18px 6px;margin:0}
+.nav{display:flex;flex-direction:column;gap:1px;padding:0 8px}
+.nav a{font-size:14px;text-decoration:none;color:var(--ink-2);line-height:1.35;
+  border-left:2px solid transparent;padding:7px 10px;border-radius:0 2px 2px 0}
+.nav a em{display:block;font-style:normal;font-size:11px;color:var(--ink-2);margin-top:1px}
+.nav a:hover{color:var(--ink);background:color-mix(in srgb,var(--ledger) 84%,var(--aade))}
+.nav a[aria-current="page"]{color:var(--ink);font-weight:600;
+  border-left-color:var(--stamp);background:var(--paper)}
+.nav a:focus-visible{outline:2px solid var(--aade);outline-offset:-2px}
+
+/* το κατώφλι: κάτω από εδώ είναι ό,τι έχει ήδη σταλεί */
+.gateline{display:flex;align-items:center;gap:8px;padding:18px 18px 8px;margin-top:auto}
+.gateline::before,.gateline::after{content:"";height:1px;background:var(--stamp);flex:1}
+.gateline span{font-size:9.5px;font-weight:600;letter-spacing:.15em;color:var(--stamp);
+  white-space:nowrap}
+.sidefoot{padding:0 18px}
+.sidefoot .lb{font-size:10px;font-weight:600;letter-spacing:.14em;color:var(--ink-2);
+  margin:0 0 5px}
+.sidefoot .mk{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--stamp);
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;margin:0}
+.sidefoot .sub{font-family:var(--mono);font-size:10.5px;color:var(--ink-2);margin:3px 0 0}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;overflow:visible;padding:0;
+    background:var(--ledger);border-right:0;border-bottom:1px solid var(--rule)}
+  .brand{padding:12px 14px 10px;border-bottom:0}
+  .brand dl{grid-template-columns:none;display:flex;flex-wrap:wrap;gap:2px 16px}
+  .navlabel,.gateline,.sidefoot{display:none}
+  .nav{flex-direction:row;overflow-x:auto;padding:0 8px;gap:2px}
+  .nav a{white-space:nowrap;border-left:0;border-bottom:2px solid transparent;
+    border-radius:2px 2px 0 0}
+  .nav a em{display:none}
+  .nav a[aria-current="page"]{border-left-color:transparent;border-bottom-color:var(--stamp)}
+  .main{padding:20px 14px 56px}
+}
+
+/* ══ ΤΥΠΟΓΡΑΦΙΑ ══ */
+.eyebrow{font-size:10px;font-weight:600;letter-spacing:.14em;color:var(--ink-2);margin:0 0 7px}
+.title{font-weight:600;font-size:clamp(23px,3.2vw,30px);line-height:1.14;
+  letter-spacing:-.015em;margin:0 0 7px}
+.title .num{font-family:var(--mono);font-weight:500;letter-spacing:-.02em}
+.lede{color:var(--ink-2);max-width:62ch;margin:0}
+.lede .mono{color:var(--ink)}
+.block{margin:34px 0 0}
+.h2{font-size:16px;font-weight:600;margin:0 0 2px;
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 11px}
+.h2 .count{font-size:11.5px;font-weight:400;color:var(--ink-2)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.empty{color:var(--ink-2);font-size:12.5px;margin:12px 0 0}
+.gloss{margin:40px 0 0;border-top:1px solid var(--rule);padding-top:15px;
+  color:var(--ink-2);font-size:12.5px;max-width:80ch}
+.gloss b{color:var(--ink);font-weight:600}
+
+/* ══ αμετάκλητες πράξεις ══ */
+.log{list-style:none;margin:12px 0 0;padding:0;border-top:1px solid var(--rule)}
+.log li{display:grid;grid-template-columns:auto 1fr;gap:4px 26px;align-items:baseline;
+  padding:13px 0;border-bottom:1px solid var(--rule)}
+.log .mk{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--stamp);
+  font-variant-numeric:tabular-nums}
+.log .what{color:var(--ink-2);font-size:13.5px}
+.log .what .mono{color:var(--ink)}
+.log .when{grid-column:1/-1;font-size:11px;color:var(--ink-2);
+  overflow-wrap:anywhere}
+@media (max-width:780px){.log li{grid-template-columns:1fr}}
+
+/* ══ μηνύματα κατάστασης ══ */
+.msg{border-left:3px solid var(--rule);background:var(--ledger);padding:11px 15px;
+  margin-top:15px;font-size:13.5px;max-width:78ch}
+.msg .k{font-size:13.5px;font-weight:600;display:block;margin-bottom:1px}
+.msg .mono{color:var(--ink)}
+.m-warn{border-left-color:var(--warn)}
+.m-warn .k{color:var(--warn)}
+.m-stop{border-left-color:var(--stamp)}
+.m-stop .k{color:var(--stamp)}
+
+/* ══ φόρμες ══ */
+.form{margin-top:11px;border:1px solid var(--rule);background:var(--ledger);padding:15px}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:13px 18px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f label{font-size:12.5px;font-weight:500}
+.f select,.f input{width:100%}
+.hint{font-size:11px;color:var(--ink-2)}
+select,input[type=text],input[type=date]{font-family:var(--sans);font-size:13px;
+  color:var(--ink);background:var(--paper);border:1px solid var(--rule);
+  border-radius:2px;padding:5px 6px;max-width:100%}
+select:focus-visible,input:focus-visible,button:focus-visible{
+  outline:2px solid var(--aade);outline-offset:1px}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+@media (max-width:1080px){.split{grid-template-columns:1fr}}
+
+/* ══ κουμπιά ══ */
+.act{font-family:var(--sans);font-size:14px;font-weight:500;background:var(--paper);
+  color:var(--ink);border:1px solid var(--ink-2);border-radius:3px;
+  padding:8px 15px;cursor:pointer;margin-top:15px}
+.act:hover{border-color:var(--aade);color:var(--aade)}
+.act:active{transform:translateY(1px)}
+@media (prefers-reduced-motion:reduce){.act:active{transform:none}}
+
+/* ══ Η ΠΟΡΕΙΑ: πού είσαι, τι μένει, πού είναι το κατώφλι ══ */
+.flow{list-style:none;display:flex;flex-wrap:wrap;align-items:center;
+  margin:0 0 20px;padding:0;font-size:12px}
+.flow li{display:flex;align-items:center;color:var(--ink-2);padding:2px 0}
+.flow li + li::before{content:"";width:22px;height:1px;background:var(--rule);margin:0 9px}
+.flow .now{color:var(--ink);font-weight:600}
+.flow .gate{color:var(--stamp);font-weight:600;font-size:9.5px;letter-spacing:.15em}
+.flow .gate::before,.flow .gate + li::before{background:var(--stamp)}
+
+/* ══ ΤΟ ΜΗΤΡΩΟ: αριστερά της ραφής ό,τι κρατά η ΑΑΔΕ, δεξιά η απόφασή σου ══ */
+.scroll{overflow-x:auto;border:1px solid var(--rule);margin-top:11px}
+.reg{border-collapse:collapse;width:100%;font-size:13.5px;white-space:nowrap}
+.reg th{font-size:10.5px;font-weight:600;letter-spacing:.1em;color:var(--ink-2);
+  text-align:left;padding:9px 8px 7px;border-bottom:1px solid var(--rule);vertical-align:bottom}
+.reg td{padding:7px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
+.reg tr:last-child td{border-bottom:0}
+.reg .given{background:var(--ledger)}
+.reg .code,.reg .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.reg .r{text-align:right}
+.reg .aade{color:var(--aade)}
+.reg tbody tr:hover .given{background:color-mix(in srgb,var(--ledger) 84%,var(--aade))}
+/* η ραφή, όπως στο sidebar: αλλαγή υλικού, όχι διακοσμητική γραμμή */
+.reg .seam{position:relative;border-left:1px solid var(--rule)}
+.reg .seam::before{content:"";position:absolute;left:-2px;top:0;bottom:0;width:3px;
+  background:repeating-linear-gradient(to bottom,var(--rule) 0 2px,transparent 2px 6px)}
+/* Στο RequestDocs η επωνυμία λείπει από 45 στα 66: λέγεται ρητά αντί να
+   επαναληφθεί το ΑΦΜ σε δεύτερη στήλη. */
+.reg .anon{color:var(--ink-2);font-style:italic;font-size:12.5px;white-space:normal;max-width:22ch}
+.reg .unk{color:var(--warn)}
+.reg .why{white-space:normal;color:var(--ink-2);font-size:12.5px;max-width:52ch}
+.reg select{max-width:185px}
+
+/* ══ η μπάρα προς το επόμενο βήμα ══ */
+.gobar{margin-top:26px;border-top:1px solid var(--rule);padding-top:20px;
+  display:flex;flex-wrap:wrap;gap:12px 26px;align-items:center}
+.gobar .act{margin-top:0}
+.guard{color:var(--ink-2);font-size:13px;max-width:46ch;margin:0}
+.guard b{color:var(--ink);font-weight:600}
+.ack{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600}
+.ack input{width:16px;height:16px}
+.aside{color:var(--ink-2);font-size:12.5px;margin:10px 0 0;max-width:70ch}
+
+/* ώχρα = λείπει κάτι· το κόκκινο μένει μόνο για το αμετάκλητο */
+.req{color:var(--warn);font-size:10px;font-weight:600;letter-spacing:.08em;
+  margin-left:7px}
+.unset{border-color:var(--warn);box-shadow:inset 2px 0 0 var(--warn)}
+
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Η απόφασή σου μένει κολλημένη δεξιά όσο τα δεδομένα της ΑΑΔΕ κυλούν πίσω από τη
+   ραφή: σε πυκνό μητρώο το οριζόντιο κύλισμα είναι δεκτό, το να χάνεται όμως το
+   κουμπί που πρέπει να πατήσεις δεν είναι. */
+.reg .choose{position:sticky;right:0;background:var(--paper);z-index:1;
+  display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+.reg th.choose{display:table-cell;white-space:nowrap}
+.reg tbody tr:hover .choose{background:var(--paper)}
+.recall{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2);
+  white-space:nowrap;cursor:pointer}
+.recall input{width:14px;height:14px}
+.reg .inforce{white-space:normal}
+.reg .inforce span{display:block}
+.reg .inforce em{font-style:normal;color:var(--ink-2)}
+.reg .inforce span + span{margin-top:4px;padding-top:4px;border-top:1px solid var(--rule)}
+
+/* ══ Η ΣΦΡΑΓΙΔΑ ΕΙΝΑΙ ΤΟ ΑΠΟΤΥΠΩΜΑ, ΤΟ ΚΟΥΜΠΙ ΕΙΝΑΙ ΚΟΥΜΠΙ ══ */
+/* Το μόνο control που στέλνει, και το μόνο κόκκινο της εφαρμογής. */
+.send{font-family:var(--sans);font-size:15px;font-weight:600;color:var(--paper);
+  background:var(--stamp);border:2px solid var(--stamp);border-radius:3px;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--stamp) 18%,transparent);
+  padding:11px 22px;cursor:pointer;margin:3px 5px}
+.send:hover{background:color-mix(in srgb,var(--stamp) 84%,#000);
+  border-color:color-mix(in srgb,var(--stamp) 84%,#000)}
+.send:active{transform:translateY(1px)}
+.send small{display:block;font-family:var(--mono);font-size:10.5px;font-weight:400;
+  opacity:.88;margin-top:3px}
+a.act{text-decoration:none;display:inline-block}
+
+/* ══ παλιό → νέο: η μία κίνηση της σελίδας ══ */
+.repl{white-space:normal;min-width:26ch}
+.repl .alarm{display:block;font-size:10px;letter-spacing:.12em;color:var(--stamp)}
+.repl .old{position:relative;font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+.repl .old::after{content:"";position:absolute;left:0;top:52%;height:1.5px;width:100%;
+  background:var(--stamp);transform:scaleX(0);transform-origin:left}
+.play .repl .old::after{animation:strike .34s ease forwards;
+  animation-delay:calc(var(--i,0)*90ms + 200ms)}
+.repl .arrow{color:var(--stamp);padding:0 4px}
+.repl .new{font-family:var(--mono);font-size:12.5px;color:var(--ink);font-weight:500}
+.repl .keep{font-family:var(--mono);font-size:12.5px;color:var(--ink-2)}
+@keyframes strike{to{transform:scaleX(1)}}
+@media (prefers-reduced-motion:reduce){
+  .play .repl .old::after{animation:none;transform:scaleX(1)}
+  .send:active{transform:none}
+}
+
+/* ══ το XML: παρόν αλλά διπλωμένο ══ */
+details{margin-top:12px;border:1px solid var(--rule);background:var(--ledger)}
+summary{font-size:13.5px;font-weight:500;padding:9px 14px;cursor:pointer}
+summary .count{font-family:var(--mono);font-size:11px;font-weight:400;
+  color:var(--ink-2);margin-left:8px}
+details pre{margin:0;padding:0 14px 14px;overflow-x:auto;font-family:var(--mono);
+  font-size:11.5px;line-height:1.55;color:var(--ink-2)}
+
+/* ══ Η ΣΦΡΑΓΙΔΑ: το αποτύπωμα που έμεινε ══ */
+.stamped{display:inline-block;border:2px solid var(--stamp);border-radius:3px;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--stamp) 20%,transparent);
+  color:var(--stamp);padding:12px 22px 10px;transform:rotate(-2.5deg);
+  margin:22px 12px 14px 4px}
+.stamped .lbl{font-size:10px;font-weight:600;letter-spacing:.14em;display:block}
+.stamped .mk{font-family:var(--mono);font-size:clamp(21px,4vw,29px);font-weight:600;
+  font-variant-numeric:tabular-nums;display:block;margin-top:2px}
+.stamped .sub{font-family:var(--mono);font-size:10.5px;display:block;opacity:.75}
+@media (prefers-reduced-motion:reduce){.stamped{transform:none}}
+
+/* Σε πίνακα αναφοράς δεν υπάρχει απόφαση, άρα δεν υπάρχει ραφή: απλή χάραξη όπου
+   αρχίζουν τα επίσημα στοιχεία της ΑΑΔΕ. Η ραφή μένει μόνο όπου κάτι αποφασίζεις. */
+.reg .official{border-left:1px solid var(--rule)}
+
+/* ══ ημερομηνία σε dd-mm-yyyy, με το native ημερολόγιο πίσω από το κουμπί ══ */
+.datefield{display:flex;align-items:stretch;gap:0;position:relative}
+.datefield input[type=text]{flex:1;min-width:0;border-radius:2px 0 0 2px}
+/* Ο picker πρέπει να αποδίδεται για να δουλέψει το showPicker(), αλλά δεν
+   εμφανίζεται: η ορατή μορφή είναι του πεδίου κειμένου. */
+.datefield .pick{position:absolute;right:0;bottom:0;width:1px;height:1px;
+  opacity:0;pointer-events:none;border:0;padding:0}
+.calbtn{border:1px solid var(--rule);border-left:0;border-radius:0 2px 2px 0;
+  background:var(--paper);cursor:pointer;padding:0 9px;font-size:13px;line-height:1}
+.calbtn:hover{border-color:var(--aade)}
+.calbtn:focus-visible{outline:2px solid var(--aade);outline-offset:1px}
+
+/* Σε ποιο myDATA πηγαίνει κάθε διαβίβαση — ορατό παντού, όπως το ΑΦΜ. */
+.envbar{padding:.35rem 1rem;font-size:.8rem;font-weight:600;letter-spacing:.04em;text-align:center}
+.envbar--production{background:var(--stamp);color:#fff}
+.envbar--dev{background:var(--ledger);color:var(--ink-2);border-bottom:1px solid var(--rule)}

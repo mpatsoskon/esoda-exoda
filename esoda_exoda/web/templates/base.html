@@ -1,0 +1,56 @@
+{# Κέλυφος κάθε οθόνης: αριστερά ό,τι δεν αλλάζεις, δεξιά το χαρτί εργασίας.
+   Η ταυτότητα του αποστολέα μένει ορατή παντού — κάθε διαβίβαση φεύγει με αυτό
+   το ΑΦΜ και είναι αμετάκλητη. #}
+<!doctype html>
+<html lang="el">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Έσοδα-Έξοδα myDATA{% endblock %}</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='2' fill='%239B1B30'/><path d='M4 4.5h8M4 8h8M4 11.5h5' stroke='%23fff' stroke-width='1.4'/></svg>">
+</head>
+<body>
+{% if taxpayer %}<div class="envbar envbar--{{ taxpayer.environment }}" role="status">{% if taxpayer.environment == 'production' %}PRODUCTION — οι διαβιβάσεις είναι αμετάκλητες{% else %}DEV (sandbox ΑΑΔΕ){% endif %}</div>{% endif %}
+<div class="app">
+
+  <aside class="side">
+    <div class="brand">
+      <p class="nm">Έσοδα-Έξοδα myDATA</p>
+      <dl>
+        <dt>ΑΦΜ</dt><dd class="mono">{{ taxpayer.afm if taxpayer else '—' }}</dd>
+        {% if taxpayer and taxpayer.city %}<dt>Έδρα</dt><dd>{{ taxpayer.city }} <span class="mono">{{ taxpayer.postal_code }}</span></dd>{% endif %}
+        <dt>Βιβλία</dt><dd class="mono">{{ year }}</dd>
+      </dl>
+    </div>
+
+    <p class="navlabel">ΒΙΒΛΙΑ</p>
+    <nav class="nav" aria-label="Βιβλία">
+      <a href="/"{% if screen == 'index' %} aria-current="page"{% endif %}>Κατάσταση</a>
+      <a href="/counterparties"{% if screen == 'counterparties' %} aria-current="page"{% endif %}>Αντισυμβαλλόμενοι<em>ποιος είναι ποιος ΑΦΜ</em></a>
+    </nav>
+
+    <p class="navlabel">ΑΠΟ ΠΟΥ ΞΕΚΙΝΑΣ</p>
+    <nav class="nav" aria-label="Αφετηρίες">
+      <a href="/classify?year={{ year }}&amp;month={{ month }}"{% if screen == 'classify' %} aria-current="page"{% endif %}>Χαρακτηρισμός εξόδων<em>έξοδα που έλαβες</em></a>
+      <a href="/transmit"{% if screen == 'transmit' %} aria-current="page"{% endif %}>Διαβίβαση εξόδου<em>έξοδα που εκδίδεις</em></a>
+    </nav>
+
+    {# Κάτω από την κόκκινη γραμμή είναι ό,τι έχει σταλεί: δεν είναι προορισμός,
+       είναι αποτέλεσμα. Το MARK μένει ορατό γιατί είναι το μόνο χερούλι για ακύρωση. #}
+    <div class="gateline"><span>ΑΜΕΤΑΚΛΗΤΟ</span></div>
+    <div class="sidefoot">
+      <p class="lb">ΤΕΛΕΥΤΑΙΑ ΔΙΑΒΙΒΑΣΗ</p>
+      {% if last %}
+        <p class="mk">{{ last.mark }}</p>
+        <p class="sub">{{ last.at | ora }} · {{ last.inv_type }} · {{ last.net | eur }} €</p>
+      {% else %}
+        <p class="sub">καμία ακόμη</p>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main class="main">{% block main %}{% endblock %}</main>
+</div>
+</body>
+</html>

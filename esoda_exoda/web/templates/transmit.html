@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Διαβίβαση εξόδου — Έσοδα-Έξοδα myDATA{% endblock %}
+
+{# Ορατό πεδίο σε dd-mm-yyyy, με κουμπί που ανοίγει το native ημερολόγιο. Το
+   input[type=date] από μόνο του αποδίδει σε μορφή του browser — σε en-US η 2
+   Σεπτεμβρίου φαινόταν «9/2/2026» — και η σελίδα δεν μπορεί να το αλλάξει. #}
+{% macro date_field(id, value) %}
+  <div class="f"><label for="{{ id }}">Ημ/νία έκδοσης</label>
+    <span class="datefield">
+      <input id="{{ id }}" name="issue_date" type="text" inputmode="numeric" required
+             pattern="\d{2}-\d{2}-\d{4}" placeholder="dd-mm-yyyy"
+             value="{{ value or today }}" autocomplete="off">
+      <input id="{{ id }}-pick" type="date" class="pick" tabindex="-1" aria-hidden="true">
+      <button type="button" class="calbtn" data-for="{{ id }}"
+              aria-label="Άνοιγμα ημερολογίου">📅</button>
+    </span>
+    <span class="hint">dd-mm-yyyy</span>
+  </div>
+{% endmacro %}
+
+{% block main %}
+<ol class="flow">
+  <li class="now">Συμπλήρωσε το έξοδο</li>
+  <li>Έλεγξε πριν σταλεί</li>
+  <li class="gate">ΑΜΕΤΑΚΛΗΤΟ</li>
+  <li>Στάλθηκε</li>
+</ol>
+
+<p class="eyebrow">ΕΞΟΔΑ ΠΟΥ ΕΚΔΙΔΕΙΣ ΜΟΝΟΣ ΣΟΥ</p>
+<h1 class="title">Διαβίβαση αυτο-δηλούμενου εξόδου</h1>
+<p class="lede">Παραστατικά που δεν στέλνει κανείς άλλος για σένα: κοινόχρηστα,
+αποσβέσεις, υπηρεσίες εξωτερικού. Καταλήγουν στην ίδια οθόνη ελέγχου με τον
+χαρακτηρισμό.</p>
+
+{% if error %}
+  <div class="msg m-warn"><span class="k">Δεν προχώρησε</span>{{ error }}</div>
+{% endif %}
+
+<div class="block">
+  <h2 class="h2">Από πρότυπο
+    <span class="count">{{ cfg.presets.keys() | join(' · ') }}</span></h2>
+  <form class="form" method="post" action="/transmit/preview">
+    <div class="fields">
+      <div class="f"><label for="preset">Είδος</label>
+        <select id="preset" name="preset">
+          {% for name, p in cfg.presets.items() %}
+            <option value="{{ name }}"{% if form.preset == name %} selected{% endif %}
+              data-invtype="{{ p.inv_type }}">{{ name }} — {{ cfg.type_labels.get(p.inv_type, p.inv_type) }}</option>
+          {% endfor %}
+        </select></div>
+      {{ date_field("issue_date", form.issue_date) }}
+      <div class="f"><label for="net">Καθαρή αξία</label>
+        <input id="net" name="net" type="text" inputmode="decimal"
+               value="{{ form.net or '' }}" required>
+        <span class="hint">1.234,56 ή 1234.56</span></div>
+      <div class="f"><label for="series">Σειρά</label>
+        <input id="series" name="series" type="text" value="{{ form.series or '' }}">
+        <span class="hint">κενό = 0</span></div>
+      <div class="f"><label for="aa">ΑΑ <span class="req" id="aa-req" hidden>υποχρεωτικό</span></label>
+        <input id="aa" name="aa" type="text" value="{{ form.aa or '' }}"
+               aria-describedby="aa-hint">
+        <span class="hint" id="aa-hint">κενό = επόμενο, από ό,τι έχει σταλεί</span></div>
+    </div>
+    <button class="act" type="submit">Έλεγξε πριν σταλεί →</button>
+  </form>
+  <p class="aside">Στα κοινόχρηστα (13.x) το ΑΑ είναι ο αριθμός λογαριασμού του
+  παρόχου — δεν παράγεται από αρίθμηση, οπότε ζητείται ρητά.</p>
+</div>
+
+<div class="block">
+  <h2 class="h2">Υπηρεσίες εξωτερικού
+    <span class="count">14.3 ενδοκοινοτική · 14.4 τρίτων χωρών</span></h2>
+  {% if suppliers %}
+    <form class="form" method="post" action="/transmit/foreign/preview">
+      <div class="fields">
+        <div class="f"><label for="supplier">Προμηθευτής</label>
+          <select id="supplier" name="supplier">
+            {% for cid, s in suppliers %}
+              <option value="{{ cid }}"{% if form.supplier == cid|string %} selected{% endif %}>{{ s.name }} ({{ s.inv_type }}, {{ s.country }})</option>
+            {% endfor %}
+          </select></div>
+        {{ date_field("g_issue_date", form.g_issue_date) }}
+        <div class="f"><label for="g_net">Καθαρή αξία</label>
+          <input id="g_net" name="net" type="text" inputmode="decimal"
+                 value="{{ form.g_net or '' }}" required>
+          <span class="hint">EUR</span></div>
+      </div>
+      <button class="act" type="submit">Έλεγξε πριν σταλεί →</button>
+    </form>
+    <div class="msg">
+      <span class="k">Πλασματικό ΦΠΑ 24%</span>
+      Στο 14.x χρεώνεσαι το ΦΠΑ και το εκπίπτεις ισόποσα. Το ακριβές ποσό φαίνεται
+      στην οθόνη ελέγχου, υπολογισμένο στην καθαρή αξία που θα διαβιβαστεί.
+    </div>
+  {% else %}
+    <p class="empty">Κανένας προμηθευτής εξωτερικού. <a href="/counterparties/new">Πρόσθεσε αντισυμβαλλόμενο</a> με χώρα εκτός GR και τύπο 14.3/14.4.</p>
+  {% endif %}
+  <p class="aside">Νέος προμηθευτής εξωτερικού: <a href="/counterparties/new">Αντισυμβαλλόμενοι → Νέος</a>.</p>
+</div>
+
+<script>
+/* Το κουμπί ανοίγει το native ημερολόγιο και γράφει πίσω σε dd-mm-yyyy. Χωρίς
+   JavaScript το πεδίο μένει κείμενο με pattern — δηλώνει τη μορφή και επικυρώνεται. */
+(function () {
+  function toIso(v) {
+    var m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(v.trim());
+    return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+  }
+  function toUi(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+  }
+  document.querySelectorAll('.calbtn').forEach(function (btn) {
+    var text = document.getElementById(btn.dataset.for);
+    var pick = document.getElementById(btn.dataset.for + '-pick');
+    if (!text || !pick || typeof pick.showPicker !== 'function') { btn.hidden = true; return; }
+    btn.addEventListener('click', function () {
+      pick.value = toIso(text.value) || '';
+      pick.showPicker();
+    });
+    pick.addEventListener('change', function () {
+      var ui = toUi(pick.value);
+      if (ui) { text.value = ui; }
+    });
+  });
+})();
+
+/* Στα 13.x το ΑΑ είναι ο αριθμός λογαριασμού του παρόχου, οπότε δεν υπάρχει
+   «επόμενο» να υπολογιστεί. Ο διακομιστής το επιβάλλει· εδώ φαίνεται εκ των προτέρων. */
+(function () {
+  var preset = document.getElementById('preset');
+  var aa = document.getElementById('aa');
+  if (!preset || !aa) return;
+  function sync() {
+    var t = preset.options[preset.selectedIndex].dataset.invtype || '';
+    var needed = t.indexOf('13.') === 0;
+    aa.required = needed;
+    document.getElementById('aa-req').hidden = !needed;
+    document.getElementById('aa-hint').textContent = needed
+      ? 'ο αριθμός λογαριασμού του παρόχου'
+      : 'κενό = επόμενο, από ό,τι έχει σταλεί';
+  }
+  preset.addEventListener('change', sync);
+  sync();
+})();
+</script>
+{% endblock %}
