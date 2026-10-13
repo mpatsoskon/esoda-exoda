@@ -5,6 +5,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+DEFAULT_DB_PATH = "esoda_exoda.sqlite3"
+
 @dataclass
 class Config:
     data_dir: Path = Path(".")
@@ -14,11 +16,14 @@ class Config:
     category_labels: dict = field(default_factory=dict)
     e3_income: list = field(default_factory=list)
     database: dict = field(default_factory=dict)
-    database_url: str = ""
     source_path: Path = Path(".")
 
     def resolve(self, rel: str) -> Path:
         return (self.data_dir / rel).resolve()
+
+    def db_path(self) -> Path:
+        """Το αρχείο SQLite: [database] path, σχετικό με το data_dir όπως κάθε path."""
+        return self.resolve(self.database.get("path", DEFAULT_DB_PATH))
 
     def categories_for(self, direction: str) -> dict:
         prefix = {"income": "category1_", "expense": "category2_"}[direction]

@@ -29,6 +29,9 @@ Thumbs.db
 
 # Προσωπικά δεδομένα — ποτέ στο repo
 *.xlsx
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 /scripts/mydata_xml/
 *.local.toml
 /.personal-data-terms.txt
