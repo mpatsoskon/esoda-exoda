@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from .templating import templates, base_context
 from ..config import load_config
 from ..counterparties import foreign_suppliers
-from ..db import DbUnavailable, connect, migrate
+from ..db import DbUnavailable, begin_immediate, connect, migrate
 from ..taxpayers import TaxpayerError, current_taxpayer
 from ..fetches import has_fetched
 from ..invoices import self_declared_of_year, self_declared_since
@@ -247,25 +247,33 @@ def foreign_preview(request: Request, supplier: str = Form(...),
 def submit_invoice(cfg, tp, xml: str, year: int) -> tuple[dict, int]:
     """Διαβιβάζει και επιστρέφει (σώμα, κωδικό κατάστασης). Ζει χωριστά από το route
     ώστε η σημασιολογία μετά την αμετάκλητη αποστολή να ελέγχεται χωρίς HTTP."""
+    # Κλείδωμα εγγραφής ΠΡΙΝ από το POST: αν η βάση είναι πιασμένη, τίποτα δεν φεύγει.
     try:
-        result = send_invoices(xml, env=tp.environment)
-    except TransmitError as e:
-        return {"error": str(e)}, 400
-    except HTTPError as e:
-        if e.code != 429:
-            raise
-        return {"error": "Όριο κλήσεων myDATA — δοκίμασε ξανά σε λίγα λεπτά."}, 503
-    entry = parse_entry_summary(xml)
+        lock = begin_immediate(cfg)
+    except DbUnavailable as e:
+        return {"error": f"{e} Η διαβίβαση ΔΕΝ στάλθηκε."}, 503
     try:
-        # Δική της συναλλαγή: το MARK είναι αμετάκλητο και πρέπει να γραφτεί πριν από
-        # οτιδήποτε άλλο μπορεί να αποτύχει.
-        with connect(cfg) as conn:
-            record_invoice_submission(conn, tp.id, entry, result["mark"], result["uid"],
+        try:
+            result = send_invoices(xml, env=tp.environment)
+        except TransmitError as e:
+            return {"error": str(e)}, 400
+        except HTTPError as e:
+            if e.code != 429:
+                raise
+            return {"error": "Όριο κλήσεων myDATA — δοκίμασε ξανά σε λίγα λεπτά."}, 503
+        entry = parse_entry_summary(xml)
+        try:
+            # Δική της συναλλαγή: το MARK είναι αμετάκλητο και πρέπει να γραφτεί πριν από
+            # οτιδήποτε άλλο μπορεί να αποτύχει.
+            record_invoice_submission(lock, tp.id, entry, result["mark"], result["uid"],
                                       xml, result.get("response_xml", ""))
-    except Exception as e:
-        return {"mark": result["mark"], "uid": result["uid"],
-                "log_error": f"Η διαβίβαση πέτυχε (MARK {result['mark']}) αλλά απέτυχε η "
-                             f"καταγραφή στη βάση: {e}. Σημείωσέ το χειρόγραφα."}, 207
+            lock.commit()
+        except Exception as e:
+            return {"mark": result["mark"], "uid": result["uid"],
+                    "log_error": f"Η διαβίβαση πέτυχε (MARK {result['mark']}) αλλά απέτυχε η "
+                                 f"καταγραφή στη βάση: {e}. Σημείωσέ το χειρόγραφα."}, 207
+    finally:
+        lock.close()
     try:
         month = date.fromisoformat(entry["issue_date"]).month if entry["issue_date"] else None
         with connect(cfg) as conn:

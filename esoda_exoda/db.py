@@ -84,6 +84,19 @@ def connect(cfg):
     finally:
         conn.close()
 
+def begin_immediate(cfg) -> sqlite3.Connection:
+    """Σύνδεση που κρατά ήδη το κλείδωμα εγγραφής (BEGIN IMMEDIATE). Για πριν από κάθε
+    αμετάκλητο POST: αν άλλη σύνδεση γράφει (π.χ. ανανέωση σε εξέλιξη), σκάει ΕΔΩ με
+    DbUnavailable, πριν φύγει οτιδήποτε προς την ΑΑΔΕ, αντί να σκάσει μετά η καταγραφή του
+    MARK. Ο καλών κάνει commit και close."""
+    conn = open_db(cfg.db_path())
+    try:
+        conn.execute("begin immediate")
+    except sqlite3.OperationalError as e:
+        conn.close()
+        raise DbUnavailable(f"Η βάση είναι πιασμένη από άλλη εργασία (π.χ. ανανέωση): {e}.") from e
+    return conn
+
 def _applied(conn) -> set[int]:
     exists = conn.execute(
         "select 1 from sqlite_master where type = 'table' and name = 'schema_version'"
