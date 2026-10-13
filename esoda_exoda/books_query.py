@@ -15,9 +15,11 @@ def deductible_flag(category_code: str) -> str:
 def _defaults(conn, ids: set[int]) -> dict[tuple[int, str], ClassificationDefault]:
     if not ids:
         return {}
+    ids = list(ids)
     rows = conn.execute(
         "select counterparty_id, direction, category_code, e3_code, deductible, inv_type "
-        "from classification_default where counterparty_id = any(%s)", (list(ids),)).fetchall()
+        f"from classification_default where counterparty_id in ({', '.join('?' * len(ids))})",
+        ids).fetchall()
     return {(r[0], r[1]): ClassificationDefault(*r[1:]) for r in rows}
 
 def _base(cfg, r: InvoiceRow, afm: str, col_j) -> dict:

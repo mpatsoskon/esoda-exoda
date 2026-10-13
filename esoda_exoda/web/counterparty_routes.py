@@ -164,8 +164,8 @@ async def _save(request: Request, cp_id: int | None):
             # Κενά πεδία προεπιλογής σημαίνουν «καμία προεπιλογή»: η υπάρχουσα σβήνει.
             for direction in ("expense", "income"):
                 if direction not in cp.defaults:
-                    conn.execute("delete from classification_default where counterparty_id = %s "
-                                 "and direction = %s", (new_id, direction))
+                    conn.execute("delete from classification_default where counterparty_id = ? "
+                                 "and direction = ?", (new_id, direction))
         except CounterpartyError as e:
             conn.rollback()
             return _render_form(request, conn, cfg, tp, form, cp_id, str(e), 400)
