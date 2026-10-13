@@ -1,5 +1,6 @@
 # ABOUTME: Tests του ελέγχου προσωπικών δεδομένων: γενικοί κανόνες (xlsx, πραγματικά MARK)
 # ABOUTME: και όροι από τοπική λίστα, ανεξαρτήτως πεζών/τόνων.
+import pytest
 from scripts.check_no_personal_data import load_terms, scan
 
 
@@ -9,6 +10,14 @@ def test_καθαρό_tree():
 
 def test_xlsx_απαγορεύεται():
     assert scan([("data/β.xlsx", b"PK\x03\x04")], []) == ["data/β.xlsx: αρχείο xlsx"]
+
+
+@pytest.mark.parametrize("name", ["esoda_exoda.sqlite3", "data/β.sqlite3",
+                                  "esoda_exoda.sqlite3-wal", "esoda_exoda.sqlite3-shm",
+                                  "ΠΑΛΙΑ.SQLITE3"])
+def test_αρχείο_βάσης_απαγορεύεται(name):
+    # Η βάση είναι δυαδική και θα περνούσε από τον έλεγχο κειμένου, ενώ κρατά όλα τα βιβλία.
+    assert scan([(name, b"SQLite format 3\x00")], []) == [f"{name}: αρχείο βάσης SQLite"]
 
 
 def test_πραγματικό_MARK():

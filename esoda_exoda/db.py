@@ -1,5 +1,5 @@
 # ABOUTME: Σύνδεση με SQLite (ένα αρχείο), συναλλαγή ανά αίτημα, migrations από αριθμημένα
-# ABOUTME: .sql και μετατροπή ποσών σε ακέραια λεπτά. Καμία γνώση του σχήματος εδώ.
+# ABOUTME: .sql, backup και μετατροπή ποσών σε ακέραια λεπτά. Καμία γνώση του σχήματος εδώ.
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -116,3 +116,27 @@ def migrate(conn) -> list[int]:
             raise RuntimeError(f"Η migration {path.name} απέτυχε: {e}") from e
         applied.append(version)
     return applied
+
+def backup(cfg, target) -> Path:
+    """Αντίγραφο της βάσης σε νέο αρχείο με το Connection.backup() της SQLite: σωστό και όσο
+    τρέχει η εφαρμογή, ενώ η απλή αντιγραφή του αρχείου σε WAL μπορεί να χάσει δεδομένα."""
+    source, target = cfg.db_path(), Path(target).resolve()
+    if not source.is_file():
+        raise DbUnavailable(f"Δεν υπάρχει βάση στο {source}.")
+    if target.exists():
+        raise FileExistsError(f"Το {target} υπάρχει ήδη· διάλεξε νέο όνομα αρχείου.")
+    src = open_db(source)
+    try:
+        dst = sqlite3.connect(target)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    except BaseException:
+        # Ένα μισό αντίγραφο (π.χ. γέμισε ο δίσκος) μοιάζει με κανονική βάση· δεν μένει.
+        for p in (target, Path(f"{target}-journal")):
+            p.unlink(missing_ok=True)
+        raise
+    finally:
+        src.close()
+    return target
