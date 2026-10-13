@@ -13,11 +13,12 @@ fixtures, issues ή PR. Στα tests χρησιμοποίησε συνθετικ
 `echo 'python scripts/check_no_personal_data.py' > .git/hooks/pre-commit` (και `chmod +x` σε Linux/macOS).
 
 ## Στήσιμο για ανάπτυξη
-1. `docker compose up -d` — σηκώνει την Postgres με τη βάση `esoda_exoda_test` για τα tests.
-2. `pip install -e .[dev]`
-3. `ESODA_EXODA_TEST_DSN=postgresql://esoda:esoda-dev@127.0.0.1:5432/esoda_exoda_test python -m pytest`
-   (το `esoda-dev` είναι ο προεπιλεγμένος κωδικός· αν όρισες δικό σου `POSTGRES_PASSWORD`,
-   αντικατάστησέ τον στο DSN)
+1. `pip install -e .[dev]`
+2. `python -m pytest`
+
+Κάθε test παίρνει δικό του προσωρινό αρχείο SQLite (`tests/conftest.py`)· δεν χρειάζεται
+Docker ούτε server βάσης. Τα ποσά στη βάση είναι ακέραια λεπτά: γράψε και διάβασε τα μόνο
+μέσω `db.to_cents` / `db.from_cents`.
 
 Τα tests δεν κάνουν ποτέ κλήσεις δικτύου (το `tests/conftest.py` τις μπλοκάρει).
 

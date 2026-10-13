@@ -81,11 +81,11 @@ def test_real_config_e3_income_αναφέρει_μόνο_κωδικούς_του
 
 def test_ESODA_EXODA_CONFIG_δείχνει_άλλο_αρχείο(tmp_path, monkeypatch):
     p = tmp_path / "other.toml"
-    p.write_text('[database]\ndbname = "esoda_exoda_dev"\n', encoding="utf-8")
+    p.write_text('[database]\npath = "esoda_exoda_dev.sqlite3"\n', encoding="utf-8")
     monkeypatch.setenv("ESODA_EXODA_CONFIG", str(p))
-    assert load_config().database["dbname"] == "esoda_exoda_dev"
+    assert load_config().database["path"] == "esoda_exoda_dev.sqlite3"
 
 def test_ρητό_path_υπερισχύει_του_ESODA_EXODA_CONFIG(tmp_path, monkeypatch):
-    p = tmp_path / "a.toml"; p.write_text('[database]\ndbname = "a"\n', encoding="utf-8")
+    p = tmp_path / "a.toml"; p.write_text('[database]\npath = "a.sqlite3"\n', encoding="utf-8")
     monkeypatch.setenv("ESODA_EXODA_CONFIG", str(tmp_path / "missing.toml"))
-    assert load_config(p).database["dbname"] == "a"
+    assert load_config(p).database["path"] == "a.sqlite3"
