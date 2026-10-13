@@ -9,8 +9,8 @@
    `refresh` (ενορχηστρώνει 6 GET και δεν κάνει commit), `fetches` (αρχείο ωμών απαντήσεων, ώστε
    να γίνεται re-parse χωρίς νέα κλήση). Parsers: `books`, `received`, `classifications`,
    `classification_state`.
-2. **Βάση** — `db` (σύνδεση psycopg 3, συναλλαγή ανά αίτημα, migrations από αριθμημένα `.sql`
-   στο `migrations/`), `invoices` (πίνακας ανά MARK και snapshots χαρακτηρισμού, μόνο προσθήκες),
+2. **Βάση** — `db` (αρχείο SQLite, συναλλαγή ανά αίτημα, migrations από αριθμημένα `.sql`
+   στο `migrations/`, backup, και τα ποσά σε ακέραια λεπτά μέσω `to_cents`/`from_cents`), `invoices` (πίνακας ανά MARK και snapshots χαρακτηρισμού, μόνο προσθήκες),
    `counterparties` (πελάτες/προμηθευτές ανά ΑΦΜ/χώρα με προεπιλεγμένο χαρακτηρισμό),
    `taxpayers` (ο φορολογούμενος και το περιβάλλον του), `vies` (συμπλήρωση στοιχείων από το VIES).
 3. **Χαρακτηρισμός** — `classify` (κανόνες και XML, καθαρή λογική), `classification_state`
@@ -22,7 +22,7 @@
    (layout φύλλων), `export` (Excel κατ' απαίτηση σε bytes, χωρίς αρχεία στο δίσκο), `models`.
 6. **Διεπαφή** — `web/` (FastAPI· `app.py`, `classify_routes.py`, `counterparty_routes.py`,
    `templating.py`, πρότυπα Jinja2 και στατικά αρχεία) και `cli` (`esoda-exoda` ξεκινά την
-   εφαρμογή στο 127.0.0.1:8000· `esoda-exoda setup` κάνει το αρχικό στήσιμο, `esoda-exoda keys` ξαναδίνει κλειδιά/κωδικό βάσης). Ρυθμίσεις:
+   εφαρμογή στο 127.0.0.1:8000· `esoda-exoda setup` κάνει το αρχικό στήσιμο, `esoda-exoda keys` ξαναδίνει τα κλειδιά myDATA, `esoda-exoda backup <αρχείο>` κάνει αντίγραφο της βάσης). Ρυθμίσεις:
    `config` (`config.toml`, `ESODA_EXODA_CONFIG`), κλειδιά: `credentials` (keyring).
 
 ## Τι είναι ρυθμισμένο για παροχή υπηρεσιών
@@ -42,3 +42,22 @@
 προκύπτουν: τα κλειδιά (`credentials.SERVICES`: ένα keyring service ανά περιβάλλον) και το
 endpoint (`mydata_client.base_url`). Άγνωστη τιμή σκάει με `ValueError`, ποτέ δεν πέφτει
 σιωπηλά σε production.
+
+## Βάση (SQLite)
+
+Ένα αρχείο, στο `[database] path` (σχετικό με το `data_dir`). Κάθε σύνδεση ανοίγει με
+`foreign_keys = on` (αλλιώς τα `on delete cascade` δεν κάνουν τίποτα) και σε WAL, ώστε οι
+οθόνες να διαβάζουν όσο γράφει μια ανανέωση.
+
+- **Τύποι:** `date` και `timestamptz` είναι κείμενο ISO-8601 (`timestamptz` πάντα σε UTC) και
+  `boolean` είναι 0/1. Οι converters του `db.py` δίνουν πίσω `date`, `datetime` με ζώνη και
+  `bool`, από τον δηλωμένο τύπο της στήλης. Αποτελέσματα συναρτήσεων (`max(...)`, `exists`)
+  δεν έχουν τύπο και θέλουν ρητή μετατροπή.
+- **Ποσά:** κάθε στήλη ποσού είναι `integer` σε λεπτά, ώστε εγγραφές και `sum()` να είναι
+  ακριβή. Ο κώδικας δουλεύει σε `float` ευρώ· η μετατροπή γίνεται μόνο στα `to_cents` και
+  `from_cents`.
+- **Σειρά:** τα `id` είναι `autoincrement` και δεν ξαναχρησιμοποιούνται. Το «νεότερο fetch»
+  κρίνεται από το `id`, όχι από το `fetched_at`.
+- **Migrations:** κάθε αρχείο του `migrations/` τρέχει σε δική του συναλλαγή.
+- **Μετάπτωση:** το `scripts/migrate_from_postgres.py` φέρνει μια βάση Postgres (σχήμα 2) σε
+  αρχείο SQLite και συγκρίνει πλήθη και αθροίσματα ανά πίνακα.

@@ -1,12 +1,12 @@
 # ABOUTME: Γραμμή εντολών: χωρίς όρισμα σηκώνει την εφαρμογή· `setup` καταχωρεί τον
 # ABOUTME: φορολογούμενο, το περιβάλλον myDATA και τα κλειδιά (keyring) μία φορά· `keys`
-# ABOUTME: ξαναδίνει μόνο τα κλειδιά σε υπάρχουσα εγκατάσταση.
+# ABOUTME: ξαναδίνει μόνο τα κλειδιά myDATA· `backup <αρχείο>` αντιγράφει τη βάση.
 import argparse
-import dataclasses
 import getpass
+import sqlite3
 from . import credentials
 from .config import load_config
-from .db import DbUnavailable, connect, dsn_from_parts, migrate
+from .db import DbUnavailable, backup, connect, migrate
 from .taxpayers import (ENVIRONMENTS, TaxpayerError, create_taxpayer, current_taxpayer,
                         is_valid_afm)
 
@@ -35,19 +35,8 @@ def _ask_nonempty(ask, prompt, say, what) -> str:
             return value
         say(f"Το {what} δεν μπορεί να είναι κενό. Ξαναδοκίμασε.")
 
-def _cfg_with_db_password(cfg, ask_secret):
-    """Χωρίς database_url (κανονική χρήση) ζητά τον κωδικό βάσης και χτίζει in-memory
-    config· ο κωδικός γράφεται στο keyring μόνο αφού ολοκληρωθεί όλη η είσοδος."""
-    if cfg.database_url:
-        return cfg, None
-    db_password = ask_secret("Κωδικός βάσης (POSTGRES_PASSWORD): ")
-    return dataclasses.replace(
-        cfg, database_url=dsn_from_parts(cfg.database, db_password)), db_password
-
 def run_setup(cfg, ask, ask_secret, say) -> int:
-    db_password = None
     try:
-        cfg, db_password = _cfg_with_db_password(cfg, ask_secret)
         try:
             with connect(cfg) as conn:
                 migrate(conn)
@@ -73,8 +62,6 @@ def run_setup(cfg, ask, ask_secret, say) -> int:
     except (KeyboardInterrupt, EOFError):
         say("\nΑκυρώθηκε — δεν άλλαξε τίποτα.")
         return 1
-    if db_password is not None:
-        credentials.set_db_password(db_password)
     credentials.set_credentials(env, user_id, key)
     with connect(cfg) as conn:
         create_taxpayer(conn, afm, environment=env, name=name, postal_code=postal_code, city=city)
@@ -82,9 +69,7 @@ def run_setup(cfg, ask, ask_secret, say) -> int:
     return 0
 
 def run_keys(cfg, ask, ask_secret, say) -> int:
-    db_password = None
     try:
-        cfg, db_password = _cfg_with_db_password(cfg, ask_secret)
         try:
             with connect(cfg) as conn:
                 tp = current_taxpayer(conn)
@@ -101,18 +86,33 @@ def run_keys(cfg, ask, ask_secret, say) -> int:
     except (KeyboardInterrupt, EOFError):
         say("\nΑκυρώθηκε — δεν άλλαξε τίποτα.")
         return 1
-    if db_password is not None:
-        credentials.set_db_password(db_password)
     credentials.set_credentials(tp.environment, user_id, key)
     say(f"Τα κλειδιά αποθηκεύτηκαν ({tp.environment}).")
     return 0
 
+def run_backup(cfg, target: str, say) -> int:
+    try:
+        path = backup(cfg, target)
+    except (DbUnavailable, FileExistsError, OSError, sqlite3.Error) as e:
+        say(f"{e} — δεν έγινε αντίγραφο.")
+        return 1
+    say(f"Αντίγραφο της βάσης στο {path}.")
+    return 0
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="esoda-exoda")
-    parser.add_argument("command", nargs="?", choices=["setup", "keys"],
-                        help="setup: αρχικό στήσιμο· keys: νέα κλειδιά/κωδικός βάσης σε "
-                             "υπάρχουσα εγκατάσταση· χωρίς εντολή ξεκινά η εφαρμογή")
+    parser.add_argument("command", nargs="?", choices=["setup", "keys", "backup"],
+                        help="setup: αρχικό στήσιμο· keys: νέα κλειδιά myDATA σε υπάρχουσα "
+                             "εγκατάσταση· backup <αρχείο>: αντίγραφο της βάσης· χωρίς εντολή "
+                             "ξεκινά η εφαρμογή")
+    parser.add_argument("target", nargs="?", help="το αρχείο του αντιγράφου (για backup)")
     args = parser.parse_args(argv)
+    if args.target is not None and args.command != "backup":
+        parser.error("μόνο το backup δέχεται αρχείο")
+    if args.command == "backup":
+        if not args.target:
+            parser.error("το backup θέλει αρχείο, π.χ. esoda-exoda backup αντίγραφο.sqlite3")
+        return run_backup(load_config(), args.target, print)
     if args.command == "setup":
         return run_setup(load_config(), input, getpass.getpass, print)
     if args.command == "keys":

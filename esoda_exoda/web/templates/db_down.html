@@ -4,6 +4,7 @@
 <p class="eyebrow">ΤΙΠΟΤΑ ΔΕΝ ΕΓΙΝΕ</p>
 <h1 class="title">Η εφαρμογή δεν βρίσκει τα δεδομένα της</h1>
 <div class="msg m-warn"><span class="k">Γιατί</span>{{ error }}</div>
-<p class="gloss">Η βάση τρέχει σε Docker: <span class="mono">docker compose up -d</span> στον φάκελο
-της εφαρμογής, και ξαναφόρτωσε τη σελίδα.</p>
+<p class="gloss">Η βάση είναι ένα αρχείο SQLite, στο <span class="mono">[database] path</span> του
+<span class="mono">config.toml</span>. Αν δεν έχεις στήσει ακόμη, τρέξε
+<span class="mono">esoda-exoda setup</span> και ξαναφόρτωσε τη σελίδα.</p>
 {% endblock %}

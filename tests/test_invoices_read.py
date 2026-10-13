@@ -33,7 +33,9 @@ def test_ακύρωση_από_νεότερο_fetch_εξαφανίζει_τον_
     add_snapshot(db, taxpayer.id, "M1", "transmitted_docs", f_old, None,
                  lines=[("expense", "category2_4", "E3_585_016", None)])
     f_new = store_fetch(db, taxpayer.id, "RequestTransmittedDocs", None, None, "")
-    db.execute("update mydata_fetch set fetched_at = fetched_at + interval '1 second' where id = %s", (f_new,))
+    # Ίδιο fetched_at (δύο fetches μέσα στο ίδιο χιλιοστό): η σειρά κρίνεται από το id.
+    db.execute("update mydata_fetch set fetched_at = (select fetched_at from mydata_fetch "
+               "where id = ?) where id = ?", (f_old, f_new))
     [row] = invoices_in_range(db, taxpayer.id, 2026, 7)
     assert row.transmitted is None  # το snapshot του f_old δεν είναι πια τρέχον
 
@@ -49,7 +51,7 @@ def test_εύρος_έτους_και_μήνα_και_ταξινόμηση(db, t
     f = _f(db, taxpayer)
     for mark, d, aa in (("A", date(2026, 7, 3), "2"), ("B", date(2026, 7, 3), "1"), ("C", date(2026, 8, 1), "1"), ("D", date(2025, 12, 31), "1")):
         upsert_book_record(db, taxpayer.id, Record("1", d, "1.1", 1, 0, 0, 1, mark), "expense", f, None)
-        db.execute("update invoice set aa = %s where mark = %s", (aa, mark))
+        db.execute("update invoice set aa = ? where mark = ?", (aa, mark))
     assert [r.mark for r in invoices_in_range(db, taxpayer.id, 2026)] == ["B", "A", "C"]
     assert [r.mark for r in invoices_in_range(db, taxpayer.id, 2026, 8)] == ["C"]
 
@@ -80,6 +82,23 @@ def test_current_expense_lines_μόνο_category2(db, taxpayer):
                  lines=[("income", "category1_3", "E3_561_001", 5.0)])
     out = current_expense_lines(db, taxpayer.id, ["M1", "M2", "M3"])
     assert list(out) == ["M1"] and out["M1"][0].e3_type == "E3_585_016" and out["M1"][0].value == 100.0
+    assert out["M1"][0].date == date(2026, 7, 3)  # date και μέσα από το _CURRENT
+
+def test_official_vat_αθροίζει_ακριβώς(db, taxpayer):
+    # Σε float/REAL το 0,10 + 0,20 + ... δεν βγαίνει στρογγυλό· σε λεπτά βγαίνει.
+    f = _f(db, taxpayer, "RequestVatInfo")
+    for i in range(1000):
+        add_snapshot(db, taxpayer.id, f"V{i}", "vat_info", f, date(2026, 3, 1 + i % 28),
+                     codes={"Vat333": 0.1, "Vat386": 0.07})
+    got = official_vat_by_month(db, taxpayer.id, 2026)
+    assert got == {3: {"Vat333": 100.0, "Vat386": 70.0}}
+
+def test_ποσά_invoice_γυρίζουν_ακριβή_ευρώ(db, taxpayer):
+    f = _f(db, taxpayer)
+    upsert_book_record(db, taxpayer.id, Record("1", date(2026, 7, 3), "1.1", 0.1 + 0.2, 0.07, 0, 0.37, "M1"),
+                       "expense", f, None)
+    [row] = invoices_in_range(db, taxpayer.id, 2026, 7)
+    assert (row.net, row.vat) == (0.3, 0.07)
 
 def test_self_declared_of_year_τρέφει_το_next_aa(db, taxpayer):
     f = _f(db, taxpayer, "RequestTransmittedDocs")

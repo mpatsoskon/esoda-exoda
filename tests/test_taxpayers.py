@@ -1,6 +1,6 @@
 # ABOUTME: Tests του taxpayers.py — μία γραμμή φορολογούμενου, περιβάλλον myDATA,
 # ABOUTME: και έλεγχος ψηφίου ελέγχου ΑΦΜ.
-import psycopg
+import sqlite3
 import pytest
 from esoda_exoda.taxpayers import (TaxpayerError, create_taxpayer, current_taxpayer,
                                    is_valid_afm)
@@ -15,11 +15,11 @@ def test_create_χωρίς_περιβάλλον_δεν_επιτρέπεται(db
         create_taxpayer(db, "123456783")
 
 def test_η_βάση_αρνείται_άγνωστο_περιβάλλον(db):
-    with pytest.raises(psycopg.errors.CheckViolation):
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK"):
         create_taxpayer(db, "123456783", environment="prod")
 
 def test_η_βάση_αρνείται_γραμμή_χωρίς_περιβάλλον(db):
-    with pytest.raises(psycopg.errors.NotNullViolation):
+    with pytest.raises(sqlite3.IntegrityError, match="NOT NULL"):
         db.execute("insert into taxpayer (afm) values ('123456783')")
 
 def test_current_χωρίς_γραμμή_λέει_τι_να_κάνεις(db):

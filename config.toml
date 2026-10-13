@@ -5,11 +5,9 @@ data_dir = "."
 e3_income = ["E3_561_001"]
 
 [database]
-host = "127.0.0.1"
-port = 5432
-dbname = "esoda_exoda"
-user = "esoda"
-# Ο κωδικός ζει στο keyring (service esoda-exoda-db), όχι εδώ.
+# Αρχείο SQLite, σχετικό με το data_dir. Για δεύτερο περιβάλλον (dev/production): δεύτερο
+# config με άλλο path, μέσω ESODA_EXODA_CONFIG.
+path = "esoda_exoda.sqlite3"
 
 [type_labels]
 "1.1" = "1.1 Τιμολόγιο Πώλησης"

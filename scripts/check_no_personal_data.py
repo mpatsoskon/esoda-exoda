@@ -1,4 +1,4 @@
-# ABOUTME: Αποτυγχάνει αν τα tracked αρχεία περιέχουν προσωπικά δεδομένα: xlsx, πραγματικά
+# ABOUTME: Αποτυγχάνει αν τα tracked αρχεία περιέχουν προσωπικά δεδομένα: xlsx, βάση SQLite, πραγματικά
 # ABOUTME: MARK (15 ψηφία από 4), ή όρους από την τοπική, ignored λίστα .personal-data-terms.txt.
 import argparse
 import re
@@ -32,6 +32,11 @@ def scan(files, terms: list[str]) -> list[str]:
     for path, data in files:
         if path.lower().endswith(".xlsx"):
             out.append(f"{path}: αρχείο xlsx")
+            continue
+        # Η βάση (και τα -wal/-shm της) είναι δυαδική, άρα θα την προσπερνούσε ο έλεγχος
+        # κειμένου πιο κάτω, ενώ κρατά όλα τα βιβλία.
+        if path.lower().endswith((".sqlite3", ".sqlite3-wal", ".sqlite3-shm")):
+            out.append(f"{path}: αρχείο βάσης SQLite")
             continue
         if b"\x00" in data:
             continue  # δυαδικό (γραμματοσειρές κ.λπ.)

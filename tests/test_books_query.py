@@ -95,7 +95,7 @@ def test_month_overview(db, db_cfg, taxpayer):
     f = store_fetch(db, taxpayer.id, "RequestMyExpenses", date(2026, 7, 1), date(2026, 7, 31), "")
     _exp(db, taxpayer, f, "1", "A", d=date(2026, 7, 3)); _exp(db, taxpayer, f, "2", "B", d=date(2026, 7, 4))
     cid = ensure_counterparty(db, taxpayer.id, "2"); save_default(db, cid, "expense", "category2_4", "E3_585_016", True)
-    db.execute("update invoice set counterparty_id = %s where mark = 'B'", (cid,))
+    db.execute("update invoice set counterparty_id = ? where mark = 'B'", (cid,))
     store_fetch(db, taxpayer.id, "RequestMyExpenses", date(2026, 7, 1), date(2026, 7, 31), "")
     [m] = month_overview(db, db_cfg, taxpayer, 2026)
     assert (m["month"], m["income"], m["expenses"], m["unknown"]) == (7, 0, 2, 1)
@@ -112,7 +112,7 @@ def test_golden_Ιούλιος_2026(db, db_cfg, taxpayer, fixtures_dir):
     # Τα βιβλία των fixtures είναι του 2025· για τον Ιούλιο 2026 σημαδεύουμε ως in_book
     # τα ληφθέντα του μήνα, όπως θα έκανε ένα πραγματικό RequestMyExpenses του 2026.
     db.execute("update invoice set in_book = true where received and issue_date between '2026-07-01' and '2026-07-31' "
-               "and counterpart_vat = %s", (taxpayer.afm,))
+               "and counterpart_vat = ?", (taxpayer.afm,))
     inc, exp = book_rows(db, db_cfg, taxpayer, 2026, 7)
     from esoda_exoda.invoices import official_vat_by_month
     months = vat.compute(inc, exp, official_vat_by_month(db, taxpayer.id, 2026))

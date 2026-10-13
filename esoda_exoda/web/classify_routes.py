@@ -10,7 +10,7 @@ from ..books_query import deductible_flag
 from ..checks import BLOCK, classification_findings
 from ..config import load_config
 from ..counterparties import CounterpartyError, ensure_counterparty, find_by_vat, save_default
-from ..db import connect
+from ..db import DbUnavailable, begin_immediate, connect
 from ..export import build_workbook
 from ..invoices import counterparty_names, current_expense_lines, received_docs_of_month
 from ..refresh import refresh
@@ -216,84 +216,93 @@ def submit_classifications(cfg, tp, year: int, month: int, xml_per_invoice: str 
     if not pending:
         return {"error": "Δεν στάλθηκε κανένα XML χαρακτηρισμού."}, 400
 
-    # Κάθε αίτημα χειρίζεται χωριστά: αν το πρώτο πετύχει και το δεύτερο αποτύχει, τα
-    # classification_mark του πρώτου έχουν ήδη εκδοθεί και είναι αμετάκλητα — δεν
-    # επιτρέπεται να χαθούν πίσω από ένα σφάλμα του δεύτερου.
-    results, sent_xmls, unknown, send_errors, rate_limited = [], [], [], [], 0
-    raw_by_mode, xml_by_mode = {}, {}
-    for mode, xml in pending:
-        label = _MODE_LABELS[mode]
-        try:
-            part, raw = send_expenses_classification(xml, per_invoice=mode, env=tp.environment)
-        except HTTPError as e:
-            if e.code == 429:
-                # Ο rate limiter απορρίπτει πριν την επεξεργασία: τίποτα δεν
-                # καταχωρήθηκε, και αυτή είναι η μόνη βέβαιη αστοχία.
-                rate_limited += 1
-                send_errors.append(f"Όριο κλήσεων myDATA — το αίτημα «{label}» δεν "
-                                   "στάλθηκε και τίποτα δεν καταχωρήθηκε.")
-                continue
-            reason = f"HTTP {e.code} ({e.reason})"
-        except (OSError, http.client.HTTPException) as e:
-            # Η κατηγορία ορίζεται από το ΠΟΤΕ, όχι από το τι: αστοχία μετά την
-            # αποστολή του POST. Το urllib τυλίγει σε URLError μόνο τα OSError του
-            # h.request(...) — το αίτημα που δεν έφυγε. Ό,τι σκάει στο
-            # getresponse()/read() (read timeout, RemoteDisconnected, IncompleteRead,
-            # SSLError) φτάνει γυμνό, και είναι ακριβώς η επικίνδυνη περίπτωση: το POST
-            # έφυγε. Με timeout=120 και κανένα retry, το read timeout είναι η
-            # πιθανότερη αστοχία δικτύου. Το OSError καλύπτει socket, URLError, timeout
-            # και SSL· το HTTPException δεν είναι OSError, γι' αυτό μένει χωριστά.
-            reason = str(e) or type(e).__name__
-        except ET.ParseError as e:
-            reason = f"η απάντηση του myDATA δεν διαβάζεται ({e})"
-        else:
-            raw_by_mode[mode] = raw
-            xml_by_mode[mode] = xml
-            if part:
-                results.extend({**r, "per_invoice": mode} for r in part)
-                sent_xmls.append(xml)
-                continue
-            # Άδειο envelope απάντησης — καμία γραμμή ανά παραστατικό.
-            reason = "το myDATA δεν επέστρεψε κανένα αποτέλεσμα ανά παραστατικό"
-        send_errors.append(
-            f"Το αίτημα «{label}» δεν ολοκληρώθηκε ({reason}). ΔΕΝ γνωρίζουμε αν οι "
-            "χαρακτηρισμοί του καταχωρήθηκαν — έλεγξε στο myDATA portal πριν το "
-            "ξαναστείλεις, αλλιώς κινδυνεύεις με διπλό χαρακτηρισμό.")
-        unknown.append((mode, xml, reason))
-    if rate_limited:
-        send_errors.append("Ξαναστείλε σε λίγα λεπτά μόνο τα αιτήματα που δεν "
-                           "στάλθηκαν, από την οθόνη του μήνα.")
+    # Κλείδωμα εγγραφής ΠΡΙΝ από το πρώτο POST: αν η βάση είναι πιασμένη, τίποτα δεν
+    # φεύγει. Κρατιέται ώσπου να γραφτούν τα classification_mark.
+    try:
+        lock = begin_immediate(cfg)
+    except DbUnavailable as e:
+        return {"error": f"{e} Οι χαρακτηρισμοί ΔΕΝ στάλθηκαν."}, 503
+    try:
+        # Κάθε αίτημα χειρίζεται χωριστά: αν το πρώτο πετύχει και το δεύτερο αποτύχει, τα
+        # classification_mark του πρώτου έχουν ήδη εκδοθεί και είναι αμετάκλητα — δεν
+        # επιτρέπεται να χαθούν πίσω από ένα σφάλμα του δεύτερου.
+        results, sent_xmls, unknown, send_errors, rate_limited = [], [], [], [], 0
+        raw_by_mode, xml_by_mode = {}, {}
+        for mode, xml in pending:
+            label = _MODE_LABELS[mode]
+            try:
+                part, raw = send_expenses_classification(xml, per_invoice=mode, env=tp.environment)
+            except HTTPError as e:
+                if e.code == 429:
+                    # Ο rate limiter απορρίπτει πριν την επεξεργασία: τίποτα δεν
+                    # καταχωρήθηκε, και αυτή είναι η μόνη βέβαιη αστοχία.
+                    rate_limited += 1
+                    send_errors.append(f"Όριο κλήσεων myDATA — το αίτημα «{label}» δεν "
+                                       "στάλθηκε και τίποτα δεν καταχωρήθηκε.")
+                    continue
+                reason = f"HTTP {e.code} ({e.reason})"
+            except (OSError, http.client.HTTPException) as e:
+                # Η κατηγορία ορίζεται από το ΠΟΤΕ, όχι από το τι: αστοχία μετά την
+                # αποστολή του POST. Το urllib τυλίγει σε URLError μόνο τα OSError του
+                # h.request(...) — το αίτημα που δεν έφυγε. Ό,τι σκάει στο
+                # getresponse()/read() (read timeout, RemoteDisconnected, IncompleteRead,
+                # SSLError) φτάνει γυμνό, και είναι ακριβώς η επικίνδυνη περίπτωση: το POST
+                # έφυγε. Με timeout=120 και κανένα retry, το read timeout είναι η
+                # πιθανότερη αστοχία δικτύου. Το OSError καλύπτει socket, URLError, timeout
+                # και SSL· το HTTPException δεν είναι OSError, γι' αυτό μένει χωριστά.
+                reason = str(e) or type(e).__name__
+            except ET.ParseError as e:
+                reason = f"η απάντηση του myDATA δεν διαβάζεται ({e})"
+            else:
+                raw_by_mode[mode] = raw
+                xml_by_mode[mode] = xml
+                if part:
+                    results.extend({**r, "per_invoice": mode} for r in part)
+                    sent_xmls.append(xml)
+                    continue
+                # Άδειο envelope απάντησης — καμία γραμμή ανά παραστατικό.
+                reason = "το myDATA δεν επέστρεψε κανένα αποτέλεσμα ανά παραστατικό"
+            send_errors.append(
+                f"Το αίτημα «{label}» δεν ολοκληρώθηκε ({reason}). ΔΕΝ γνωρίζουμε αν οι "
+                "χαρακτηρισμοί του καταχωρήθηκαν — έλεγξε στο myDATA portal πριν το "
+                "ξαναστείλεις, αλλιώς κινδυνεύεις με διπλό χαρακτηρισμό.")
+            unknown.append((mode, xml, reason))
+        if rate_limited:
+            send_errors.append("Ξαναστείλε σε λίγα λεπτά μόνο τα αιτήματα που δεν "
+                               "στάλθηκαν, από την οθόνη του μήνα.")
 
-    # Μία καταγραφή που δεν λέει τι χαρακτηρίστηκε και για πόσα δεν διαβάζεται χωρίς
-    # σταυρωτή αναφορά. Τα στοιχεία υπάρχουν στα XML που μόλις στάλθηκαν.
-    summary = {}
-    for xml in sent_xmls:
-        summary.update(_xml_summary(xml))
-    records = [{**r, **summary.get(r["invoice_mark"], {})} for r in results]
-    for mode, xml, reason in unknown:
-        marks = _xml_summary(xml)
-        if marks:
-            records.extend({"invoice_mark": mark, "classification_mark": "",
-                            "status": _UNKNOWN, "per_invoice": mode,
-                            "errors": [{"code": "", "message": reason}], **info}
-                           for mark, info in marks.items())
-        else:
-            # Χωρίς MARK το ίχνος είναι φτωχό, αλλά η σιωπή είναι χειρότερη.
-            records.append({"invoice_mark": "", "classification_mark": "",
-                            "status": _UNKNOWN, "per_invoice": mode,
-                            "errors": [{"code": "", "message": reason}]})
-    log_error = None
-    if records:
-        try:
-            with connect(cfg) as conn:
-                record_classification_submissions(conn, tp.id, year, records,
+        # Μία καταγραφή που δεν λέει τι χαρακτηρίστηκε και για πόσα δεν διαβάζεται χωρίς
+        # σταυρωτή αναφορά. Τα στοιχεία υπάρχουν στα XML που μόλις στάλθηκαν.
+        summary = {}
+        for xml in sent_xmls:
+            summary.update(_xml_summary(xml))
+        records = [{**r, **summary.get(r["invoice_mark"], {})} for r in results]
+        for mode, xml, reason in unknown:
+            marks = _xml_summary(xml)
+            if marks:
+                records.extend({"invoice_mark": mark, "classification_mark": "",
+                                "status": _UNKNOWN, "per_invoice": mode,
+                                "errors": [{"code": "", "message": reason}], **info}
+                               for mark, info in marks.items())
+            else:
+                # Χωρίς MARK το ίχνος είναι φτωχό, αλλά η σιωπή είναι χειρότερη.
+                records.append({"invoice_mark": "", "classification_mark": "",
+                                "status": _UNKNOWN, "per_invoice": mode,
+                                "errors": [{"code": "", "message": reason}]})
+        log_error = None
+        if records:
+            try:
+                record_classification_submissions(lock, tp.id, year, records,
                                                   xml_by_mode, raw_by_mode)
-        except Exception as e:
-            # Οι χαρακτηρισμοί υποβλήθηκαν ήδη· τα classification_mark είναι το μόνο
-            # χερούλι για έλεγχο, οπότε πρέπει να φτάσουν στον χρήστη έστω κι όταν
-            # αποτύχει η καταγραφή.
-            log_error = (f"Η υποβολή έγινε αλλά απέτυχε η καταγραφή στη βάση: {e}. "
-                         "Σημείωσε τα classification_mark χειρόγραφα.")
+                lock.commit()
+            except Exception as e:
+                # Οι χαρακτηρισμοί υποβλήθηκαν ήδη· τα classification_mark είναι το μόνο
+                # χερούλι για έλεγχο, οπότε πρέπει να φτάσουν στον χρήστη έστω κι όταν
+                # αποτύχει η καταγραφή.
+                log_error = (f"Η υποβολή έγινε αλλά απέτυχε η καταγραφή στη βάση: {e}. "
+                             "Σημείωσε τα classification_mark χειρόγραφα.")
+    finally:
+        lock.close()
 
     if not results:
         # Κανένα αίτημα δεν έφερε αποτέλεσμα ανά παραστατικό: δεν υπάρχει τίποτα να

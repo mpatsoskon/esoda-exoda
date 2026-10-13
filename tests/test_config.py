@@ -36,18 +36,19 @@ def test_load_config_remembers_its_own_path(tmp_path):
     p.write_text('data_dir = "."\n', encoding="utf-8")
     assert load_config(p).source_path == p.resolve()
 
-def test_config_διαβάζει_database_και_database_url(tmp_path):
+def test_db_path_σχετικό_με_το_data_dir(tmp_path):
     p = tmp_path / "config.toml"
-    p.write_text('[database]\nhost = "127.0.0.1"\nport = 5432\n'
-                 'dbname = "esoda_exoda"\nuser = "esoda"\n', encoding="utf-8")
-    cfg = load_config(p)
-    assert cfg.database == {"host": "127.0.0.1", "port": 5432,
-                            "dbname": "esoda_exoda", "user": "esoda"}
-    assert cfg.database_url == ""
+    p.write_text('data_dir = "data"\n[database]\npath = "books.sqlite3"\n', encoding="utf-8")
+    assert load_config(p).db_path() == (tmp_path / "data" / "books.sqlite3").resolve()
 
-def test_config_φτιάχνεται_μόνο_με_database_url():
-    cfg = Config(database_url="postgresql://a:b@h/d")
-    assert cfg.data_dir == Path(".")
+def test_db_path_προεπιλογή(tmp_path):
+    p = tmp_path / "config.toml"
+    p.write_text('data_dir = "."\n', encoding="utf-8")
+    assert load_config(p).db_path() == (tmp_path / "esoda_exoda.sqlite3").resolve()
+
+def test_το_config_του_repo_έχει_αρχείο_βάσης():
+    cfg = load_config(Path(__file__).resolve().parent.parent / "config.toml")
+    assert cfg.db_path().name == "esoda_exoda.sqlite3"
 
 def _labels_cfg():
     return Config(e3_labels={"E3_561_001": "Πωλήσεις", "E3_585_016": "Λοιπά έξοδα", "E3_587": "Αποσβέσεις"},
@@ -80,11 +81,11 @@ def test_real_config_e3_income_αναφέρει_μόνο_κωδικούς_του
 
 def test_ESODA_EXODA_CONFIG_δείχνει_άλλο_αρχείο(tmp_path, monkeypatch):
     p = tmp_path / "other.toml"
-    p.write_text('[database]\ndbname = "esoda_exoda_dev"\n', encoding="utf-8")
+    p.write_text('[database]\npath = "esoda_exoda_dev.sqlite3"\n', encoding="utf-8")
     monkeypatch.setenv("ESODA_EXODA_CONFIG", str(p))
-    assert load_config().database["dbname"] == "esoda_exoda_dev"
+    assert load_config().database["path"] == "esoda_exoda_dev.sqlite3"
 
 def test_ρητό_path_υπερισχύει_του_ESODA_EXODA_CONFIG(tmp_path, monkeypatch):
-    p = tmp_path / "a.toml"; p.write_text('[database]\ndbname = "a"\n', encoding="utf-8")
+    p = tmp_path / "a.toml"; p.write_text('[database]\npath = "a.sqlite3"\n', encoding="utf-8")
     monkeypatch.setenv("ESODA_EXODA_CONFIG", str(tmp_path / "missing.toml"))
-    assert load_config(p).database["dbname"] == "a"
+    assert load_config(p).database["path"] == "a.sqlite3"

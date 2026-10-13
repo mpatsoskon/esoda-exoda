@@ -23,12 +23,12 @@ def _fixture_fetch(fixtures_dir):
              "RequestE3Info": "mydata_e3_info_2026_07.xml", "RequestVatInfo": "mydata_vat_info_2026_07.xml"}
     return lambda m, a, b, *, env: (fixtures_dir / files[m]).read_text(encoding="utf-8")
 
-def test_index_χωρίς_βάση_δείχνει_οδηγία_όχι_500(monkeypatch):
+def test_index_χωρίς_βάση_δείχνει_οδηγία_όχι_500(monkeypatch, tmp_path):
     from esoda_exoda.web import app as web_app
     monkeypatch.setattr(web_app, "load_config",
-                        lambda: Config(database_url="postgresql://x:y@127.0.0.1:1/nope?connect_timeout=1"))
+                        lambda: Config(data_dir=tmp_path, database={"path": "λείπει/βάση.sqlite3"}))
     resp = TestClient(app).get("/")
-    assert resp.status_code == 503 and "docker compose up" in resp.text
+    assert resp.status_code == 503 and "λείπει" in resp.text and "docker" not in resp.text
 
 def test_index_χωρίς_φορολογούμενο_λέει_setup(monkeypatch, db, db_cfg):
     _wire(monkeypatch, db_cfg)
@@ -594,7 +594,7 @@ def test_classify_send_γράφει_submission_default_και_ανανεώνει
     assert resp.status_code == 200 and "C1" in resp.text
     assert envs and set(envs) == {"dev"}
     row = db.execute("select status, e3_type, amount, request_xml, response_xml from classification_submission").fetchone()
-    assert row[0] == "Success" and row[1] == "E3_585_016" and float(row[2]) == 115.0 and row[3] == xml and row[4] == "<r/>"
+    assert row[0] == "Success" and row[1] == "E3_585_016" and row[2] == 11500 and row[3] == xml and row[4] == "<r/>"
     assert find_by_vat(db, taxpayer.id, "990000155").defaults["expense"].category_code == "category2_4"
 
 def test_classify_send_remember_αλλάζει_υπάρχον_default(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
@@ -633,7 +633,7 @@ def test_classify_send_logs_e3_category_and_amount(monkeypatch, db, db_cfg, taxp
     resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": xml})
     assert resp.status_code == 200
     row = db.execute("select e3_type, category, amount from classification_submission").fetchone()
-    assert row[0] == "E3_585_016" and row[1] == "category2_4" and float(row[2]) == 75.0
+    assert row[0] == "E3_585_016" and row[1] == "category2_4" and row[2] == 7500
 
 def test_classify_send_logs_even_when_xml_is_unreadable(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     """Η υποβολή έγινε ήδη· ένα XML που δεν διαβάζεται δεν ρίχνει το route."""
@@ -993,7 +993,7 @@ def test_classify_send_logs_marks_of_the_unknown_request_from_its_xml(monkeypatc
     assert row[1] == "ΑΓΝΩΣΤΟ"
     assert row[2] is False
     assert row[3] == "E3_585_016"
-    assert float(row[4]) == 75.0
+    assert row[4] == 7500  # λεπτά
     assert "διαβάζεται" in str(row[5])
 
 def test_classify_send_says_resend_only_once_when_both_requests_are_rate_limited(

@@ -30,7 +30,7 @@ def create_taxpayer(conn, afm: str, *, environment: str, name: str = "",
                     postal_code: str = "", city: str = "") -> Taxpayer:
     row = conn.execute(
         f"insert into taxpayer (afm, name, postal_code, city, environment) "
-        f"values (%s, %s, %s, %s, %s) returning {_COLS}",
+        f"values (?, ?, ?, ?, ?) returning {_COLS}",
         (afm, name, postal_code, city, environment)).fetchone()
     return Taxpayer(*row)
 

@@ -1,6 +1,7 @@
 # ABOUTME: Αντισυμβαλλόμενοι (πελάτες και προμηθευτές) ανά ΑΦΜ/χώρα, με τον
 # ABOUTME: προεπιλεγμένο χαρακτηρισμό τους. Απορροφά expense_map, income_map, suppliers.toml.
 import re
+from datetime import date
 from dataclasses import dataclass, field
 
 EU = {"AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR",
@@ -81,7 +82,7 @@ _COLS = "id, taxpayer_id, vat, country, name, postal_code, city, notes, separate
 def _defaults(conn, cp_id: int) -> dict[str, ClassificationDefault]:
     rows = conn.execute(
         "select direction, category_code, e3_code, deductible, inv_type "
-        "from classification_default where counterparty_id = %s", (cp_id,)).fetchall()
+        "from classification_default where counterparty_id = ?", (cp_id,)).fetchall()
     return {r[0]: ClassificationDefault(*r) for r in rows}
 
 def _load(conn, row) -> Counterparty:
@@ -90,12 +91,12 @@ def _load(conn, row) -> Counterparty:
     return cp
 
 def get_counterparty(conn, cp_id: int) -> Counterparty | None:
-    row = conn.execute(f"select {_COLS} from counterparty where id = %s", (cp_id,)).fetchone()
+    row = conn.execute(f"select {_COLS} from counterparty where id = ?", (cp_id,)).fetchone()
     return _load(conn, row) if row else None
 
 def find_by_vat(conn, taxpayer_id: int, vat: str) -> Counterparty | None:
     row = conn.execute(
-        f"select {_COLS} from counterparty where taxpayer_id = %s and vat = %s "
+        f"select {_COLS} from counterparty where taxpayer_id = ? and vat = ? "
         "order by id limit 1", (taxpayer_id, vat)).fetchone()
     return _load(conn, row) if row else None
 
@@ -108,10 +109,10 @@ def ensure_counterparty(conn, taxpayer_id: int, vat: str, name: str = "",
     found = find_by_vat(conn, taxpayer_id, vat)
     if found:
         if name and not found.name:
-            conn.execute("update counterparty set name = %s where id = %s", (name, found.id))
+            conn.execute("update counterparty set name = ? where id = ?", (name, found.id))
         return found.id
     return conn.execute(
-        "insert into counterparty (taxpayer_id, vat, country, name) values (%s, %s, %s, %s) "
+        "insert into counterparty (taxpayer_id, vat, country, name) values (?, ?, ?, ?) "
         "returning id", (taxpayer_id, vat, country, name)).fetchone()[0]
 
 def save_counterparty(conn, cp: Counterparty) -> int:
@@ -119,13 +120,14 @@ def save_counterparty(conn, cp: Counterparty) -> int:
     if cp.id is None:
         cp.id = conn.execute(
             "insert into counterparty (taxpayer_id, vat, country, name, postal_code, city, "
-            "notes, separate_totals) values (%s, %s, %s, %s, %s, %s, %s, %s) returning id",
+            "notes, separate_totals) values (?, ?, ?, ?, ?, ?, ?, ?) returning id",
             (cp.taxpayer_id, cp.vat, cp.country, cp.name, cp.postal_code, cp.city,
              cp.notes, cp.separate_totals)).fetchone()[0]
     else:
         conn.execute(
-            "update counterparty set vat = %s, country = %s, name = %s, postal_code = %s, "
-            "city = %s, notes = %s, separate_totals = %s, updated_at = now() where id = %s",
+            "update counterparty set vat = ?, country = ?, name = ?, postal_code = ?, "
+            "city = ?, notes = ?, separate_totals = ?, "
+            "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') where id = ?",
             (cp.vat, cp.country, cp.name, cp.postal_code, cp.city, cp.notes,
              cp.separate_totals, cp.id))
     for d in cp.defaults.values():
@@ -137,7 +139,7 @@ def save_default(conn, counterparty_id: int, direction: str, category_code: str,
                  e3_code: str, deductible: bool | None, inv_type: str = "") -> None:
     conn.execute(
         "insert into classification_default (counterparty_id, direction, category_code, "
-        "e3_code, deductible, inv_type) values (%s, %s, %s, %s, %s, %s) "
+        "e3_code, deductible, inv_type) values (?, ?, ?, ?, ?, ?) "
         "on conflict (counterparty_id, direction) do update set category_code = excluded."
         "category_code, e3_code = excluded.e3_code, deductible = excluded.deductible, "
         "inv_type = excluded.inv_type",
@@ -152,12 +154,15 @@ def list_counterparties(conn, taxpayer_id: int) -> list[dict]:
         "          and i.direction = 'expense'), "
         "  exists (select 1 from classification_default d where d.counterparty_id = c.id "
         "          and d.direction = 'expense') "
-        "from counterparty c where taxpayer_id = %s", (taxpayer_id,)).fetchall()
+        "from counterparty c where taxpayer_id = ?", (taxpayer_id,)).fetchall()
     out = []
     for r in rows:
         cp = _load(conn, r[:9])
-        has_expenses, has_default = r[11], r[12]
-        out.append({"cp": cp, "invoices": r[9], "last_date": r[10],
+        # Τα αποτελέσματα συναρτήσεων δεν έχουν δηλωμένο τύπο, άρα ούτε converter: το
+        # max(issue_date) έρχεται ως κείμενο ISO και το exists ως 0/1.
+        has_expenses, has_default = bool(r[11]), bool(r[12])
+        last_date = date.fromisoformat(r[10]) if r[10] else None
+        out.append({"cp": cp, "invoices": r[9], "last_date": last_date,
                     "missing_default": has_expenses and not has_default})
     out.sort(key=lambda x: (not x["missing_default"], x["cp"].name, x["cp"].vat))
     return out
@@ -167,11 +172,11 @@ def foreign_suppliers(conn, taxpayer_id: int) -> list[tuple[int, ForeignSupplier
         "select c.id, c.name, c.vat, c.country, c.postal_code, c.city, d.inv_type, "
         "d.e3_code, d.category_code from counterparty c "
         "join classification_default d on d.counterparty_id = c.id and d.direction = 'expense' "
-        "where c.taxpayer_id = %s and c.country <> 'GR' and d.inv_type <> '' "
+        "where c.taxpayer_id = ? and c.country <> 'GR' and d.inv_type <> '' "
         "order by c.name", (taxpayer_id,)).fetchall()
     return [(r[0], ForeignSupplier(*r[1:])) for r in rows]
 
 def subtotal_parties(conn, taxpayer_id: int) -> list[tuple[str, str]]:
     return [tuple(r) for r in conn.execute(
-        "select vat, name from counterparty where taxpayer_id = %s and separate_totals "
+        "select vat, name from counterparty where taxpayer_id = ? and separate_totals "
         "order by name", (taxpayer_id,)).fetchall()]
