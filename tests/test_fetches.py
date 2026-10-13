@@ -6,7 +6,7 @@ def test_store_και_has_fetched(db, taxpayer):
     assert not has_fetched(db, taxpayer.id, "RequestTransmittedDocs")
     fid = store_fetch(db, taxpayer.id, "RequestTransmittedDocs", None, None, "<a/>")
     assert fid > 0 and has_fetched(db, taxpayer.id, "RequestTransmittedDocs")
-    body = db.execute("select body from mydata_fetch where id = %s", (fid,)).fetchone()[0]
+    body = db.execute("select body from mydata_fetch where id = ?", (fid,)).fetchone()[0]
     assert body == "<a/>"
 
 def test_refresh_dates_ανά_μήνα_που_καλύφθηκε(db, taxpayer):

@@ -88,11 +88,11 @@ def test_list_βάζει_πρώτα_όσους_έχουν_έξοδα_χωρίς_
     # Seed με σκέτο SQL, χωρίς store_fetch/upsert_book_record (Task 5) — αλλιώς το commit
     # του Task 4 θα ήταν red μέχρι να υπάρξει το Task 5.
     f = db.execute("insert into mydata_fetch (taxpayer_id, method, date_from, date_to, body) "
-                   "values (%s, 'RequestMyExpenses', '2026-01-01', '2026-12-31', '<x/>') returning id",
+                   "values (?, 'RequestMyExpenses', '2026-01-01', '2026-12-31', '<x/>') returning id",
                    (taxpayer.id,)).fetchone()[0]
     db.execute("insert into invoice (taxpayer_id, mark, direction, issue_date, counterparty_id, "
                "first_seen_fetch_id, last_seen_fetch_id) "
-               "values (%s, 'M1', 'expense', '2026-07-03', %s, %s, %s)", (taxpayer.id, without, f, f))
+               "values (?, 'M1', 'expense', '2026-07-03', ?, ?, ?)", (taxpayer.id, without, f, f))
     rows = list_counterparties(db, taxpayer.id)
     assert [r["cp"].vat for r in rows] == ["B", "A"]
     assert rows[0]["invoices"] == 1 and rows[0]["last_date"] == date(2026, 7, 3)

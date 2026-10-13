@@ -23,7 +23,7 @@ def _row(db, mark):
     return db.execute(
         "select direction, inv_type, series, aa, issuer_vat, issuer_name, counterpart_vat, "
         "net, vat, withheld, in_book, received, self_declared, uid, cancelled_by_mark, "
-        "first_seen_fetch_id, last_seen_fetch_id from invoice where mark = %s", (mark,)).fetchone()
+        "first_seen_fetch_id, last_seen_fetch_id from invoice where mark = ?", (mark,)).fetchone()
 
 def test_βιβλίο_μετά_RequestDocs_συμπληρώνουν_την_ίδια_γραμμή(db, taxpayer):
     f1 = _fetch(db, taxpayer)
@@ -34,7 +34,7 @@ def test_βιβλίο_μετά_RequestDocs_συμπληρώνουν_την_ίδ�
     r = _row(db, "M1")
     assert r[0] == "expense" and r[2:4] == ("Α", "42") and r[5] == "ΠΡΟΜΗΘΕΥΤΗΣ Γ ΟΕ"
     assert (r[10], r[11]) == (True, True) and (r[15], r[16]) == (f1, f2)
-    assert float(r[7]) == 100.0
+    assert r[7] == 10000  # λεπτά
     n = db.execute("select count(*) from invoice where mark = 'M1'").fetchone()[0]
     assert n == 1
 
@@ -71,7 +71,7 @@ def test_set_headers_μόνο_για_υπάρχοντα(db, taxpayer):
                        "income", f, None)
     set_headers(db, taxpayer.id, {"I1": ("Β", "7"), "ΑΓΝΩΣΤΟ": ("Χ", "1")})
     r = _row(db, "I1")
-    assert r[2:4] == ("Β", "7") and float(r[9]) == 100.0
+    assert r[2:4] == ("Β", "7") and r[9] == 10000
     assert _row(db, "ΑΓΝΩΣΤΟ") is None
 
 def test_snapshot_με_γραμμές_και_κωδικούς(db, taxpayer):
@@ -82,6 +82,6 @@ def test_snapshot_με_γραμμές_και_κωδικούς(db, taxpayer):
                       codes={"Vat366": 115.0, "Vat386": 27.6})
     assert s1 != s2
     lines = db.execute("select kind, category, e3_type, value from classification_line").fetchall()
-    assert [(l[0], l[1], l[2], float(l[3])) for l in lines] == [("expense", "category2_4", "E3_585_016", 100.0)]
+    assert lines == [("expense", "category2_4", "E3_585_016", 10000)]  # λεπτά
     codes = dict(db.execute("select code, value from vat_code_line").fetchall())
-    assert {k: float(v) for k, v in codes.items()} == {"Vat366": 115.0, "Vat386": 27.6}
+    assert codes == {"Vat366": 11500, "Vat386": 2760}
