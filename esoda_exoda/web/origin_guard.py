@@ -5,7 +5,8 @@ from starlette.responses import PlainTextResponse
 
 _HOSTS = {"127.0.0.1", "localhost"}
 _SAFE = {"GET", "HEAD", "OPTIONS"}
-_CROSS = "Άρνηση: το αίτημα δεν ήρθε από σελίδα της εφαρμογής."
+_CROSS = ("Άρνηση: το αίτημα δεν ήρθε από σελίδα της εφαρμογής. Αν το έστειλες εσύ από "
+             "την εφαρμογή, κάποια επέκταση του browser αφαιρεί τα headers Origin/Sec-Fetch-Site.")
 
 def refusal(method: str, headers: Mapping[str, str]) -> str | None:
     """None όταν το αίτημα περνά, αλλιώς ο λόγος της άρνησης.
