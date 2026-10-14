@@ -320,3 +320,48 @@ def test_parse_issue_date_refuses_anything_else():
 def test_parse_issue_date_refuses_an_impossible_day():
     with pytest.raises(TransmitError):
         parse_issue_date("31-02-2026")
+
+def test_build_xml_escapes_series_and_aa_17_2():
+    entry = Entry(inv_type="17.2", series="A&B", aa="<1>", issue_date=date(2026, 12, 31),
+                  net=1.0, vat=0.0, vat_category="8", e3_type="E3_587", category="category2_8")
+    root = ET.fromstring(build_xml(entry, "123456783"))
+    header = _els(root, "invoiceHeader")[0]
+    assert _txt(header, "series") == "A&B" and _txt(header, "aa") == "<1>"
+
+def test_build_xml_escapes_series_and_aa_13_3():
+    entry = Entry(inv_type="13.3", series="A&B", aa="<1>", issue_date=date(2026, 3, 31),
+                  net=12.0, vat=0.0, vat_category="8", e3_type="E3_585_016",
+                  category="category2_3")
+    root = ET.fromstring(build_xml(entry, "123456783", "10000", "ΑΛΦΑΠΟΛΗ & ΒΗΤΑ"))
+    header = _els(root, "invoiceHeader")[0]
+    assert _txt(header, "series") == "A&B" and _txt(header, "aa") == "<1>"
+    assert _txt(_els(root, "counterpart")[0], "city") == "ΑΛΦΑΠΟΛΗ & ΒΗΤΑ"
+
+def test_build_xml_escapes_codes():
+    entry = Entry(inv_type="17.2", series="0", aa="1", issue_date=date(2026, 12, 31),
+                  net=1.0, vat=0.0, vat_category="8<", e3_type="E3&587",
+                  category="category2_8>")
+    root = ET.fromstring(build_xml(entry, "123456783"))
+    assert _txt(root, "vatCategory") == "8<"
+    assert _txt(root, "classificationType") == "E3&587"
+    assert _txt(root, "classificationCategory") == "category2_8>"
+
+def test_build_xml_escapes_afm_and_inv_type():
+    entry = Entry(inv_type="17&2", series="0", aa="1", issue_date=date(2026, 12, 31),
+                  net=1.0, vat=0.0, vat_category="8", e3_type="E3_587", category="category2_8")
+    root = ET.fromstring(build_xml(entry, "1&2"))
+    assert _txt(_els(root, "invoiceHeader")[0], "invoiceType") == "17&2"
+    assert _txt(_els(root, "issuer")[0], "vatNumber") == "1&2"
+
+def test_build_xml_14_escapes_afm_and_inv_type():
+    sup = replace(_foreign_supplier(), inv_type="14&3")
+    xml = build_xml_14(sup, date(2026, 9, 2), 100.0, "1", "1&2", "10000", "ΑΛΦΑΠΟΛΗ")
+    root = ET.fromstring(xml)
+    assert _txt(_els(root, "invoiceHeader")[0], "invoiceType") == "14&3"
+    assert _txt(_els(root, "counterpart")[0], "vatNumber") == "1&2"
+
+def test_build_xml_14_escapes_aa():
+    xml = build_xml_14(_foreign_supplier(), date(2026, 9, 2), 100.0, "<1>", "123456783",
+                       "10000", "ΑΛΦΑΠΟΛΗ")
+    root = ET.fromstring(xml)
+    assert _txt(_els(root, "invoiceHeader")[0], "aa") == "<1>"

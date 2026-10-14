@@ -47,10 +47,10 @@ def build_xml(entry: Entry, afm: str, postal_code: str = "", city: str = "") -> 
         if not postal_code or not city:
             raise TransmitError("Συμπλήρωσε postal_code και city στο config.toml "
                                 "πριν τη διαβίβαση 13.x.")
-        party = _COUNTERPART.format(afm=afm, postal_code=_x(postal_code), city=_x(city))
+        party = _COUNTERPART.format(afm=_x(afm), postal_code=_x(postal_code), city=_x(city))
     else:
-        party = _ISSUER.format(afm=afm)
-    cls = _CLASSIFICATION.format(e3_type=entry.e3_type, category=entry.category,
+        party = _ISSUER.format(afm=_x(afm))
+    cls = _CLASSIFICATION.format(e3_type=_x(entry.e3_type), category=_x(entry.category),
                                  net=entry.net)
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <InvoicesDoc xmlns="http://www.aade.gr/myDATA/invoice/v1.0"
@@ -58,16 +58,16 @@ def build_xml(entry: Entry, afm: str, postal_code: str = "", city: str = "") -> 
   <invoice>
 {party}
     <invoiceHeader>
-      <series>{entry.series}</series>
-      <aa>{entry.aa}</aa>
+      <series>{_x(entry.series)}</series>
+      <aa>{_x(entry.aa)}</aa>
       <issueDate>{entry.issue_date.isoformat()}</issueDate>
-      <invoiceType>{entry.inv_type}</invoiceType>
+      <invoiceType>{_x(entry.inv_type)}</invoiceType>
       <currency>EUR</currency>
     </invoiceHeader>
     <invoiceDetails>
       <lineNumber>1</lineNumber>
       <netValue>{entry.net:.2f}</netValue>
-      <vatCategory>{entry.vat_category}</vatCategory>
+      <vatCategory>{_x(entry.vat_category)}</vatCategory>
       <vatAmount>{entry.vat:.2f}</vatAmount>
 {cls}
     </invoiceDetails>
@@ -99,7 +99,7 @@ def build_xml_14(sup, issue_date: date, net: float, aa: str, afm: str,
                  postal_code: str, city: str) -> str:
     vat = notional_vat(net)
     cls = (_CLASSIFICATION.format(e3_type=_x(sup.e3), category=_x(sup.category), net=net)
-           + "\n" + _VAT_CLS.format(vat_cls=sup.vat_classification, net=net))
+           + "\n" + _VAT_CLS.format(vat_cls=_x(sup.vat_classification), net=net))
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <InvoicesDoc xmlns="http://www.aade.gr/myDATA/invoice/v1.0"
              xmlns:ecls="https://www.aade.gr/myDATA/expensesClassificaton/v1.0">
@@ -115,7 +115,7 @@ def build_xml_14(sup, issue_date: date, net: float, aa: str, afm: str,
       </address>
     </issuer>
     <counterpart>
-      <vatNumber>{afm}</vatNumber>
+      <vatNumber>{_x(afm)}</vatNumber>
       <country>GR</country>
       <branch>0</branch>
       <address>
@@ -125,9 +125,9 @@ def build_xml_14(sup, issue_date: date, net: float, aa: str, afm: str,
     </counterpart>
     <invoiceHeader>
       <series>0</series>
-      <aa>{aa}</aa>
+      <aa>{_x(aa)}</aa>
       <issueDate>{issue_date.isoformat()}</issueDate>
-      <invoiceType>{sup.inv_type}</invoiceType>
+      <invoiceType>{_x(sup.inv_type)}</invoiceType>
       <currency>EUR</currency>
     </invoiceHeader>
     <invoiceDetails>
