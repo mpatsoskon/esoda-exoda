@@ -26,6 +26,7 @@ from ..transmit import (Entry, TransmitError, build_xml, build_xml_14, next_aa,
                         parse_issue_date)
 from .classify_routes import router as classify_router
 from .counterparty_routes import router as counterparty_router
+from .origin_guard import origin_guard
 
 _HERE = Path(__file__).resolve().parent
 
@@ -42,6 +43,7 @@ async def lifespan(app):
     yield
 
 app = FastAPI(title="ΕΣΟΔΑ-ΕΞΟΔΑ myDATA", lifespan=lifespan)
+app.middleware("http")(origin_guard)
 app.include_router(classify_router)
 app.include_router(counterparty_router)
 app.mount("/static", StaticFiles(directory=_HERE / "static"), name="static")
