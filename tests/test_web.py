@@ -9,9 +9,8 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 import openpyxl
 import pytest
-from fastapi.testclient import TestClient
+from web_client import local_client
 from esoda_exoda.config import Config
-from esoda_exoda.web.app import app
 
 def _wire(monkeypatch, db_cfg):
     from esoda_exoda.web import app as web_app
@@ -27,17 +26,17 @@ def test_index_χωρίς_βάση_δείχνει_οδηγία_όχι_500(monkey
     from esoda_exoda.web import app as web_app
     monkeypatch.setattr(web_app, "load_config",
                         lambda: Config(database_url="postgresql://x:y@127.0.0.1:1/nope?connect_timeout=1"))
-    resp = TestClient(app).get("/")
+    resp = local_client().get("/")
     assert resp.status_code == 503 and "docker compose up" in resp.text
 
 def test_index_χωρίς_φορολογούμενο_λέει_setup(monkeypatch, db, db_cfg):
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/")
+    resp = local_client().get("/")
     assert resp.status_code == 503 and "esoda-exoda setup" in resp.text
 
 def test_index_δείχνει_ΑΦΜ_από_τη_βάση_και_link_αντισυμβαλλόμενων(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    html = TestClient(app).get("/").text
+    html = local_client().get("/").text
     assert "123456783" in html and 'href="/counterparties"' in html and "ΑΛΦΑΠΟΛΗ" in html
 
 def test_index_δείχνει_διαβιβάσεις_και_μήνες(monkeypatch, db, db_cfg, taxpayer):
@@ -48,14 +47,14 @@ def test_index_δείχνει_διαβιβάσεις_και_μήνες(monkeypat
     store_fetch(db, taxpayer.id, "RequestMyExpenses", date(2026, 7, 1), date(2026, 7, 31), "")
     db.commit()
     _wire(monkeypatch, db_cfg)
-    html = TestClient(app).get("/").text
+    html = local_client().get("/").text
     assert "900000000001054" in html and "07/2026" in html and 'href="/export/2026.xlsx"' in html
 
 def test_refresh_μήνα_γράφει_στη_βάση_και_δείχνει_σύνοψη(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     from esoda_exoda.web import app as web_app
     _wire(monkeypatch, db_cfg)
     monkeypatch.setattr(web_app.mydata_client, "fetch_xml", _fixture_fetch(fixtures_dir))
-    resp = TestClient(app).post("/refresh", data={"year": "2026", "month": "7"})
+    resp = local_client().post("/refresh", data={"year": "2026", "month": "7"})
     assert resp.status_code == 200
     assert db.execute("select count(*) from mydata_fetch").fetchone()[0] == 6
     assert "ΤΙΠΟΤΑ ΔΕΝ ΣΤΑΛΘΗΚΕ" in resp.text and "01/07/2026" in resp.text
@@ -66,7 +65,7 @@ def test_refresh_έτους_χωρίς_μήνα(monkeypatch, db, db_cfg, taxpaye
     seen = []
     fx = _fixture_fetch(fixtures_dir)
     monkeypatch.setattr(web_app.mydata_client, "fetch_xml", lambda m, a, b, *, env: (seen.append((a, b, env)), fx(m, a, b, env=env))[1])
-    TestClient(app).post("/refresh", data={"year": "2026", "month": ""})
+    local_client().post("/refresh", data={"year": "2026", "month": ""})
     assert seen[0] == ("01/01/2026", "31/12/2026", "dev")
 
 def test_refresh_429_κάνει_rollback_και_λέει_πρόταση(monkeypatch, db, db_cfg, taxpayer):
@@ -75,7 +74,7 @@ def test_refresh_429_κάνει_rollback_και_λέει_πρόταση(monkeypa
     def boom(m, a, b, *, env):
         raise HTTPError("u", 429, "Too Many Requests", {}, None)
     monkeypatch.setattr(web_app.mydata_client, "fetch_xml", boom)
-    resp = TestClient(app).post("/refresh", data={"year": "2026", "month": "7"})
+    resp = local_client().post("/refresh", data={"year": "2026", "month": "7"})
     assert resp.status_code == 503 and "Όριο κλήσεων" in resp.text
     assert db.execute("select count(*) from mydata_fetch").fetchone()[0] == 0
 
@@ -83,12 +82,12 @@ def test_refresh_αναφέρει_ΑΦΜ_χωρίς_χαρακτηρισμό(mon
     from esoda_exoda.web import app as web_app
     _wire(monkeypatch, db_cfg)
     monkeypatch.setattr(web_app.mydata_client, "fetch_xml", _fixture_fetch(fixtures_dir))
-    html = TestClient(app).post("/refresh", data={"year": "2025", "month": ""}).text
+    html = local_client().post("/refresh", data={"year": "2025", "month": ""}).text
     assert "χωρίς χαρακτηρισμό" in html and "/counterparties" in html
 
 def test_export_κατεβάζει_xlsx(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/export/2026.xlsx")
+    resp = local_client().get("/export/2026.xlsx")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/vnd.openxmlformats")
     assert "2026.xlsx" in resp.headers["content-disposition"]
@@ -98,7 +97,7 @@ def test_index_has_year_and_month_form_for_classification(monkeypatch, db, db_cf
     """Ο χρήστης δεν πρέπει να επεξεργάζεται URL για να διαλέξει μήνα, και ο μήνας
     δεν είναι σταθερός στον κώδικα: η φόρμα ανοίγει στον τρέχοντα."""
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/")
+    resp = local_client().get("/")
     form = re.search(r'<form[^>]*action="/classify".*?</form>', resp.text, re.S)
     assert form, "λείπει η φόρμα επιλογής μήνα"
     assert 'name="period"' in form.group(0)
@@ -107,7 +106,7 @@ def test_index_has_year_and_month_form_for_classification(monkeypatch, db, db_cf
 
 def test_transmit_preview_rejects_ambiguous_amount(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview",
+    resp = local_client().post("/transmit/preview",
                                 data={"preset": "κοινόχρηστα",
                                       "issue_date": "31-03-2026", "net": "1.250"})
     assert resp.status_code == 400
@@ -160,34 +159,34 @@ _TODAY_FORM = _TODAY.strftime("%d-%m-%Y")
 
 def test_transmit_form_lists_presets_and_foreign_from_db(monkeypatch, db, db_cfg, taxpayer):
     cid = _seed_foreign(db, taxpayer); _wire(monkeypatch, db_cfg)
-    html = TestClient(app).get("/transmit").text
+    html = local_client().get("/transmit").text
     assert "κοινόχρηστα" in html and f'value="{cid}"' in html and "FOREIGN SUPPLIER A B.V." in html
     assert 'href="/counterparties/new"' in html and 'action="/suppliers"' not in html
 
 def test_transmit_preview_computes_aa_from_db(monkeypatch, db, db_cfg, taxpayer):
     _seed_transmitted(db, taxpayer, "3"); _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview", data={"preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1.250,40"})
+    resp = local_client().post("/transmit/preview", data={"preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1.250,40"})
     assert resp.status_code == 200 and "&lt;aa&gt;4&lt;/aa&gt;" in resp.text
     assert "χωρίς ΦΠΑ" in resp.text and "εκπίπτει" not in resp.text  # vat_category 8 = χωρίς ΦΠΑ
 
 def test_transmit_preview_χωρίς_ανανέωση_ζητά_ανανέωση(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview", data={"preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1"})
+    resp = local_client().post("/transmit/preview", data={"preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1"})
     assert resp.status_code == 400 and "Ανανέωση" in resp.text
 
 def test_transmit_preview_refuses_blank_aa_for_13x(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview", data={"preset": "κοινόχρηστα", "issue_date": "01-08-2026", "net": "12"})
+    resp = local_client().post("/transmit/preview", data={"preset": "κοινόχρηστα", "issue_date": "01-08-2026", "net": "12"})
     assert resp.status_code == 400 and "αριθμός λογαριασμού" in resp.text
 
 def test_foreign_preview_builds_xml_with_notional_vat(monkeypatch, db, db_cfg, taxpayer):
     cid = _seed_foreign(db, taxpayer); _seed_transmitted(db, taxpayer); _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/foreign/preview", data={"supplier": str(cid), "issue_date": "02-09-2026", "net": "100"})
+    resp = local_client().post("/transmit/foreign/preview", data={"supplier": str(cid), "issue_date": "02-09-2026", "net": "100"})
     assert resp.status_code == 200 and "&lt;vatAmount&gt;24.00&lt;/vatAmount&gt;" in resp.text and "VAT_365" in resp.text
 
 def test_foreign_preview_unknown_supplier_is_400(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/foreign/preview", data={"supplier": "999", "issue_date": "02-09-2026", "net": "1"})
+    resp = local_client().post("/transmit/foreign/preview", data={"supplier": "999", "issue_date": "02-09-2026", "net": "1"})
     assert resp.status_code == 400 and "Άγνωστος" in resp.text
 
 def test_transmit_send_γράφει_submission_με_xml_και_ανανεώνει(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
@@ -198,7 +197,7 @@ def test_transmit_send_γράφει_submission_με_xml_και_ανανεώνε�
     monkeypatch.setattr(web_app, "send_invoices",
                         lambda x, *, env: (envs.append(env), {"mark": "M1", "uid": "U1", "response_xml": "<ok/>"})[1])
     monkeypatch.setattr(web_app.mydata_client, "fetch_xml", _fixture_fetch(fixtures_dir))
-    resp = TestClient(app).post("/transmit/send", data={"xml": xml, "year": "2026"})
+    resp = local_client().post("/transmit/send", data={"xml": xml, "year": "2026"})
     assert resp.status_code == 200 and "M1" in resp.text
     assert envs == ["dev"]
     row = db.execute("select inv_type, aa, request_xml, response_xml from invoice_submission").fetchone()
@@ -211,7 +210,7 @@ def test_transmit_send_returns_mark_when_refresh_fails(monkeypatch, db, db_cfg, 
     monkeypatch.setattr(web_app, "send_invoices", lambda x, *, env: {"mark": "M1", "uid": "U1", "response_xml": ""})
     def boom(m, a, b, *, env): raise RuntimeError("κάτω")
     monkeypatch.setattr(web_app.mydata_client, "fetch_xml", boom)
-    resp = TestClient(app).post("/transmit/send", data={"xml": "<InvoicesDoc/>", "year": "2026"})
+    resp = local_client().post("/transmit/send", data={"xml": "<InvoicesDoc/>", "year": "2026"})
     assert resp.status_code == 207 and "M1" in resp.text
     assert db.execute("select count(*) from invoice_submission").fetchone()[0] == 1
 
@@ -221,7 +220,7 @@ def test_transmit_send_writes_nothing_on_error(monkeypatch, db, db_cfg, taxpayer
     _wire(monkeypatch, db_cfg)
     def refuse(x, *, env): raise TransmitError("myDATA ValidationError: κάτι")
     monkeypatch.setattr(web_app, "send_invoices", refuse)
-    resp = TestClient(app).post("/transmit/send", data={"xml": "<InvoicesDoc/>", "year": "2026"})
+    resp = local_client().post("/transmit/send", data={"xml": "<InvoicesDoc/>", "year": "2026"})
     assert resp.status_code == 400
     assert db.execute("select count(*) from invoice_submission").fetchone()[0] == 0
 
@@ -230,7 +229,7 @@ def test_transmit_send_reports_rate_limit(monkeypatch, db, db_cfg, taxpayer):
     from esoda_exoda.web import app as web_app
     def limited(x, *, env): raise HTTPError("u", 429, "Too Many Requests", {}, None)
     monkeypatch.setattr(web_app, "send_invoices", limited)
-    resp = TestClient(app).post("/transmit/send", data={"xml": "<InvoicesDoc/>", "year": "2026"})
+    resp = local_client().post("/transmit/send", data={"xml": "<InvoicesDoc/>", "year": "2026"})
     assert resp.status_code == 503 and "Όριο κλήσεων" in resp.text
 
 def test_transmit_preview_uses_given_series_and_aa(monkeypatch, db, db_cfg, taxpayer):
@@ -238,7 +237,7 @@ def test_transmit_preview_uses_given_series_and_aa(monkeypatch, db, db_cfg, taxp
     οπότε η φόρμα πρέπει να μπορεί να συνεχίσει την ίδια αρίθμηση."""
     _refreshed_transmitted(db, taxpayer)
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview",
+    resp = local_client().post("/transmit/preview",
                                 data={"preset": "κοινόχρηστα",
                                       "issue_date": "01-08-2026", "net": "12,00",
                                       "series": " 123456783 ", "aa": " 8000000020 "})
@@ -251,7 +250,7 @@ def test_transmit_preview_blank_series_and_aa_keep_defaults(monkeypatch, db, db_
     """Στις αποσβέσεις (17.2) το ΑΑ είναι δική μας αρίθμηση, οπότε το κενό σημαίνει
     «το επόμενο»."""
     _seed_transmitted(db, taxpayer, "0"); _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview",
+    resp = local_client().post("/transmit/preview",
                                 data={"preset": "αποσβέσεις",
                                       "issue_date": "31-03-2026", "net": "120",
                                       "series": "  ", "aa": ""})
@@ -261,14 +260,14 @@ def test_transmit_preview_blank_series_and_aa_keep_defaults(monkeypatch, db, db_
 
 def test_transmit_preview_με_χειροκίνητο_ΑΑ_χωρίς_ανανέωση_ζητά_ανανέωση(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview", data={
+    resp = local_client().post("/transmit/preview", data={
         "preset": "κοινόχρηστα", "issue_date": _TODAY_FORM, "net": "12,00",
         "series": "123456783", "aa": "8000000020"})
     assert resp.status_code == 400 and "Ανανέωση" in resp.text
 
 def test_transmit_preview_μπλοκάρει_διπλή_διαβίβαση(monkeypatch, db, db_cfg, taxpayer):
     _seed_13_3(db, taxpayer, "8000000010", _TODAY, 12); _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview", data={
+    resp = local_client().post("/transmit/preview", data={
         "preset": "κοινόχρηστα", "issue_date": _TODAY_FORM, "net": "36,00",
         "series": "123456783", "aa": " 8000000010 "})
     assert resp.status_code == 400
@@ -278,13 +277,13 @@ def test_transmit_preview_μπλοκάρει_διπλή_διαβίβαση(monke
 
 def test_transmit_preview_διπλή_17_2_με_κενή_σειρά(monkeypatch, db, db_cfg, taxpayer):
     _seed_transmitted(db, taxpayer, "3"); _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview", data={
+    resp = local_client().post("/transmit/preview", data={
         "preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1", "series": "", "aa": "3"})
     assert resp.status_code == 400 and "Σειρά 0 / ΑΑ 3" in _visible(resp.text)
 
 def test_transmit_preview_προειδοποιεί_και_ζητά_επιβεβαίωση(monkeypatch, db, db_cfg, taxpayer):
     _seed_13_3(db, taxpayer, "1", _TODAY, 12); _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview", data={
+    resp = local_client().post("/transmit/preview", data={
         "preset": "κοινόχρηστα", "issue_date": _TODAY_FORM, "net": "36,00",
         "series": "123456783", "aa": "2"})
     assert resp.status_code == 200
@@ -294,7 +293,7 @@ def test_transmit_preview_προειδοποιεί_και_ζητά_επιβεβ�
 
 def test_transmit_preview_χωρίς_προειδοποίηση_χωρίς_checkbox(monkeypatch, db, db_cfg, taxpayer):
     _seed_13_3(db, taxpayer, "1", _TODAY, 12); _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview", data={
+    resp = local_client().post("/transmit/preview", data={
         "preset": "κοινόχρηστα", "issue_date": _TODAY_FORM, "net": "13,00",
         "series": "123456783", "aa": "2"})
     assert resp.status_code == 200
@@ -303,7 +302,7 @@ def test_transmit_preview_χωρίς_προειδοποίηση_χωρίς_check
 def test_foreign_preview_προειδοποιεί_για_ε3_ημεδαπής(monkeypatch, db, db_cfg, taxpayer):
     cid = _seed_foreign(db, taxpayer, e3="E3_585_009"); _seed_transmitted(db, taxpayer)
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/foreign/preview", data={
+    resp = local_client().post("/transmit/foreign/preview", data={
         "supplier": str(cid), "issue_date": _TODAY_FORM, "net": "100"})
     assert resp.status_code == 200
     assert "E3_585_009 (υπηρεσίες ημεδαπής)" in resp.text and 'name="ack" required' in resp.text
@@ -318,7 +317,7 @@ def test_foreign_preview_προειδοποιεί_για_πιθανό_διπλό
         mark="S14", uid="", inv_type="14.3", series="0", aa="1", date=_TODAY, net=100, vat=0,
         e3_type="E3_585_010", category="category2_3", issuer_vat="NL999999003B01"), f, None)
     db.commit(); _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/foreign/preview", data={
+    resp = local_client().post("/transmit/foreign/preview", data={
         "supplier": str(cid), "issue_date": _TODAY_FORM, "net": "100"})
     assert resp.status_code == 200
     assert "Υπάρχει ήδη διαβιβασμένο 14.3" in resp.text and "ΑΑ 1)" in resp.text
@@ -328,7 +327,7 @@ def test_foreign_preview_προειδοποιεί_για_πιθανό_διπλό
 def test_foreign_preview_μπλοκάρει_κωδικό_εσόδου_προμηθευτή(monkeypatch, db, db_cfg, taxpayer):
     cid = _seed_foreign(db, taxpayer, category="category1_3"); _seed_transmitted(db, taxpayer)
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/foreign/preview", data={
+    resp = local_client().post("/transmit/foreign/preview", data={
         "supplier": str(cid), "issue_date": _TODAY_FORM, "net": "100"})
     assert resp.status_code == 400 and "κωδικό εσόδου" in _visible(resp.text)
 
@@ -353,7 +352,7 @@ def test_classify_screen_groups_by_status(monkeypatch, db, db_cfg, taxpayer, fix
     _seed_july(db, taxpayer, fixtures_dir, with_e3=False)
     save_default(db, ensure_counterparty(db, taxpayer.id, "990000155"), "expense", "category2_4", "E3_585_016", True); db.commit()
     _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/classify?year=2026&month=7")
+    resp = local_client().get("/classify?year=2026&month=7")
     assert resp.status_code == 200
     assert "ΠΡΟΜΗΘΕΥΤΗΣ Γ ΟΕ" in resp.text          # όνομα από counterparty, γεμισμένο από το RequestDocs
     assert 'value="900000000001047"' in resp.text  # καύσιμα: χαρακτηρίσιμα per-line
@@ -362,12 +361,12 @@ def test_classify_screen_groups_by_status(monkeypatch, db, db_cfg, taxpayer, fix
 def test_classify_screen_δεν_καλεί_την_ΑΑΔΕ(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
     # Το autouse fixture σκάει σε κάθε κλήση urllib — αν το route έκανε GET, το test θα έπεφτε.
-    assert TestClient(app).get("/classify?year=2026&month=7").status_code == 200
+    assert local_client().get("/classify?year=2026&month=7").status_code == 200
 
 def test_classify_screen_needs_year_and_month(monkeypatch, db_cfg):
     from esoda_exoda.web import classify_routes
     monkeypatch.setattr(classify_routes, "load_config", lambda: db_cfg)
-    resp = TestClient(app).get("/classify")
+    resp = local_client().get("/classify")
     assert resp.status_code == 400
     assert "μήνα" in resp.json()["error"]
 
@@ -381,7 +380,7 @@ def _screen_with_e3(monkeypatch, db, db_cfg, taxpayer, fixtures_dir, e3_lines=No
         add_snapshot(db, taxpayer.id, mark, "e3_info", f, issue_date, lines=e3_lines)
         db.commit()
     _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/classify?year=2026&month=7")
+    resp = local_client().get("/classify?year=2026&month=7")
     assert resp.status_code == 200
     return resp.text
 
@@ -422,7 +421,7 @@ def test_classify_screen_δείχνει_μόνο_κωδικούς_εξόδων(m
 def test_classify_preview_refuses_empty_e3_code(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     """Το κενό που στέλνει το placeholder option πρέπει να κόβεται με 400."""
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "7",
         "mark": ["900000000001048"],
         "e3_900000000001048": "",
@@ -431,7 +430,7 @@ def test_classify_preview_refuses_empty_e3_code(monkeypatch, db, db_cfg, taxpaye
     assert "κωδικό Ε3" in resp.json()["error"]
 
 def _preview_classification(e3, category, mark="900000000001048"):
-    return TestClient(app).post("/classify/preview", data={
+    return local_client().post("/classify/preview", data={
         "year": "2026", "month": "7", "mark": [mark],
         f"e3_{mark}": e3, f"category_{mark}": category})
 
@@ -460,7 +459,7 @@ def test_classify_preview_χωρίς_προειδοποίηση_χωρίς_check
 
 def test_classify_preview_shows_xml_and_totals(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "7",
         "mark": ["900000000001048"],
         "e3_900000000001048": "E3_585_016",
@@ -472,7 +471,7 @@ def test_classify_preview_shows_xml_and_totals(monkeypatch, db, db_cfg, taxpayer
 def test_classify_preview_builds_per_line_xml_for_fuel(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     """Τα καύσιμα χαρακτηρίζονται ανά γραμμή: χωρίς postPerInvoice, χωρίς πεδία ΦΠΑ."""
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "7",
         "mark": ["900000000001047"],
         "e3_900000000001047": "E3_585_016",
@@ -528,7 +527,7 @@ def test_classify_screen_lists_foreign_counterpart_instead_of_hiding_it(monkeypa
     """Παραστατικό του μήνα που δεν έχει εμάς ως λήπτη δεν πρέπει να εξαφανίζεται
     σιωπηλά — πάει στην ομάδα «Άλλος λήπτης», ορατό, χωρίς checkbox."""
     _seed_received_xml(db, taxpayer, _FOREIGN_COUNTERPART_XML); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/classify?year=2026&month=7")
+    resp = local_client().get("/classify?year=2026&month=7")
     assert resp.status_code == 200
     assert "Άλλος λήπτης" in resp.text
     assert "999999999" in resp.text
@@ -539,7 +538,7 @@ def test_classify_preview_refuses_foreign_counterpart(monkeypatch, db, db_cfg, t
     """Το preview πρέπει να αρνείται ρητά ένα MARK που δεν έχει εμάς ως λήπτη,
     όχι μόνο να το αποκρύπτει στην οθόνη επιλογής."""
     _seed_received_xml(db, taxpayer, _FOREIGN_COUNTERPART_XML); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "7",
         "mark": ["900000000001006"],
         "e3_900000000001006": "E3_585_016",
@@ -551,7 +550,7 @@ def test_classify_preview_refuses_mark_of_another_month(monkeypatch, db, db_cfg,
     """Το by_mark βγαίνει πλέον ήδη φιλτραρισμένο στον μήνα του form (received_docs_of_month):
     ένα MARK άλλου μήνα απλώς δεν υπάρχει εκεί, άρα η άρνηση είναι «Άγνωστο MARK»."""
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "3",
         "mark": ["900000000001048"],
         "e3_900000000001048": "E3_585_016",
@@ -567,7 +566,7 @@ def test_classify_preview_refuses_out_of_scope_type(monkeypatch, db, db_cfg, tax
     """Η οθόνη δείχνει τους τύπους 8.4/9.3 ως «εκτός εύρους» χωρίς checkbox, αλλά ο
     έλεγχος πρέπει να υπάρχει και εκεί που χτίζεται το XML — αλλιώς μόνο κρύβει."""
     _seed_received_xml(db, taxpayer, _OUT_OF_SCOPE_TYPE_XML); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "7",
         "mark": ["900000000001006"],
         "e3_900000000001006": "E3_585_016",
@@ -589,7 +588,7 @@ def test_classify_send_γράφει_submission_default_και_ανανεώνει
     monkeypatch.setattr(classify_routes, "send_expenses_classification",
                         lambda x, per_invoice=True, *, env: (envs.append(env), [{"invoice_mark": "900000000001048", "classification_mark": "C1",
                                                        "status": "Success", "errors": []}], "<r/>")[1:])
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": xml,
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": xml,
                                                         "remember": ["900000000001048|990000155|E3_585_016|category2_4"]})
     assert resp.status_code == 200 and "C1" in resp.text
     assert envs and set(envs) == {"dev"}
@@ -606,7 +605,7 @@ def test_classify_send_remember_αλλάζει_υπάρχον_default(monkeypatc
     monkeypatch.setattr(classify_routes.mydata_client, "fetch_xml", _fixture_fetch(fixtures_dir))
     monkeypatch.setattr(classify_routes, "send_expenses_classification",
                         lambda x, per_invoice=True, *, env: ([{"invoice_mark": "M", "classification_mark": "C", "status": "Success", "errors": []}], ""))
-    TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<ExpensesClassificationsDoc/>",
+    local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<ExpensesClassificationsDoc/>",
                                                  "remember": ["M|990000155|E3_585_016|category2_5"]})
     d = find_by_vat(db, taxpayer.id, "990000155").defaults["expense"]
     assert (d.category_code, d.deductible) == ("category2_5", False)
@@ -630,7 +629,7 @@ def test_classify_send_logs_e3_category_and_amount(monkeypatch, db, db_cfg, taxp
         </expensesClassificationDetailData>
       </invoicesExpensesClassificationDetails>
     </expensesInvoiceClassification></ExpensesClassificationsDoc>"""
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": xml})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": xml})
     assert resp.status_code == 200
     row = db.execute("select e3_type, category, amount from classification_submission").fetchone()
     assert row[0] == "E3_585_016" and row[1] == "category2_4" and float(row[2]) == 75.0
@@ -642,7 +641,7 @@ def test_classify_send_logs_even_when_xml_is_unreadable(monkeypatch, db, db_cfg,
     monkeypatch.setattr(classify_routes.mydata_client, "fetch_xml", _fixture_fetch(fixtures_dir))
     monkeypatch.setattr(classify_routes, "send_expenses_classification", lambda xml, per_invoice=True, *, env: ([
         {"invoice_mark": "1", "classification_mark": "11", "status": "Success", "errors": []}], "<raw/>"))
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x"})
     assert resp.status_code == 200
     assert db.execute("select classification_mark from classification_submission").fetchone()[0] == "11"
 
@@ -654,7 +653,7 @@ def test_classify_send_reports_partial_failure_without_hiding_successes(monkeypa
         {"invoice_mark": "1", "classification_mark": "11", "status": "Success", "errors": []},
         {"invoice_mark": "2", "classification_mark": "", "status": "ValidationError",
          "errors": [{"code": "339", "message": "Invalid combination"}]}], "<raw/>"))
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
     assert resp.status_code == 200 and "11" in resp.text and "339" in resp.text
 
 def test_classify_send_survives_refresh_failure(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
@@ -665,7 +664,7 @@ def test_classify_send_survives_refresh_failure(monkeypatch, db, db_cfg, taxpaye
     def boom(*a, **kw):
         raise OSError("το Excel είναι ανοιχτό")
     monkeypatch.setattr(classify_routes, "refresh", boom)
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
     assert resp.status_code == 207
     assert "11" in resp.text and "το Excel είναι ανοιχτό" in resp.text
     assert db.execute("select classification_mark from classification_submission").fetchone()[0] == "11"
@@ -679,7 +678,7 @@ def test_classify_send_remembers_only_successful_marks(monkeypatch, db, db_cfg, 
         {"invoice_mark": "1", "classification_mark": "11", "status": "Success", "errors": []},
         {"invoice_mark": "2", "classification_mark": "", "status": "ValidationError",
          "errors": [{"code": "339", "message": "x"}]}], "<raw/>"))
-    TestClient(app).post("/classify/send", data={
+    local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_invoice": "<x/>",
         "remember": ["1|990000155|E3_585_016|category2_4",
                      "2|090000150|E3_585_016|category2_4"]})
@@ -694,7 +693,7 @@ def test_classify_send_flags_unclear_results_without_treating_as_success(monkeyp
     monkeypatch.setattr(classify_routes.mydata_client, "fetch_xml", _fixture_fetch(fixtures_dir))
     monkeypatch.setattr(classify_routes, "send_expenses_classification", lambda xml, per_invoice=True, *, env: ([
         {"invoice_mark": "3", "classification_mark": "", "status": "Success", "errors": []}], "<raw/>"))
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
     assert resp.status_code == 200
     text = _visible(resp.text)
     assert "3" in text
@@ -711,7 +710,7 @@ def test_classify_send_reports_rate_limit(monkeypatch, db, db_cfg, taxpayer, fix
     def fake_refresh(*a, **kw):
         called["refresh"] = True
     monkeypatch.setattr(classify_routes, "refresh", fake_refresh)
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
     assert resp.status_code == 503
     assert "Όριο κλήσεων myDATA" in _visible(resp.text)
     assert called["refresh"] is False
@@ -730,7 +729,7 @@ def test_classify_send_reports_unreadable_response_without_claiming_failure(monk
     def fake_refresh(*a, **kw):
         called["refresh"] = True
     monkeypatch.setattr(classify_routes, "refresh", fake_refresh)
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
     assert resp.status_code == 502
     assert "portal" in _visible(resp.text)
     assert called["refresh"] is False
@@ -744,7 +743,7 @@ def test_classify_send_reports_empty_result_list_without_claiming_failure(monkey
     def fake_refresh(*a, **kw):
         called["refresh"] = True
     monkeypatch.setattr(classify_routes, "refresh", fake_refresh)
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
     assert resp.status_code == 502
     assert "portal" in _visible(resp.text)
     assert called["refresh"] is False
@@ -759,7 +758,7 @@ def test_classify_send_returns_207_when_log_write_fails(monkeypatch, db, db_cfg,
     def fail(*a, **kw):
         raise RuntimeError("disk full")
     monkeypatch.setattr(classify_routes, "record_classification_submissions", fail)
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7", "xml_per_invoice": "<x/>"})
     assert resp.status_code == 207
     text = _visible(resp.text)
     assert "11" in text and "disk full" in text
@@ -775,7 +774,7 @@ def test_classify_send_config_error_on_remember_becomes_warning(monkeypatch, db,
     def fake_save(*a, **kw):
         raise CounterpartyError("ο ΑΦΜ υπάρχει ήδη με άλλες τιμές")
     monkeypatch.setattr(classify_routes, "save_default", fake_save)
-    resp = TestClient(app).post("/classify/send", data={
+    resp = local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_invoice": "<x/>",
         "remember": ["1|990000155|E3_585_016|category2_4"]})
     assert resp.status_code == 200
@@ -788,7 +787,7 @@ def test_classify_send_ignores_malformed_remember_value(monkeypatch, db, db_cfg,
     monkeypatch.setattr(classify_routes.mydata_client, "fetch_xml", _fixture_fetch(fixtures_dir))
     monkeypatch.setattr(classify_routes, "send_expenses_classification", lambda xml, per_invoice=True, *, env: ([
         {"invoice_mark": "1", "classification_mark": "11", "status": "Success", "errors": []}], "<raw/>"))
-    resp = TestClient(app).post("/classify/send", data={
+    resp = local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_invoice": "<x/>",
         "remember": ["1|990000155|E3_585_016"]})
     assert resp.status_code == 200
@@ -799,7 +798,7 @@ def test_classify_preview_shows_both_documents_for_mixed_selection(monkeypatch, 
     """Δύο αιτήματα, μία οθόνη: ο χρήστης βλέπει ακριβώς ό,τι θα φύγει, και τώρα
     φεύγουν δύο πράγματα."""
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "7",
         "mark": ["900000000001048", "900000000001047"],
         "e3_900000000001048": "E3_585_016",
@@ -817,7 +816,7 @@ def test_classify_preview_shows_both_documents_for_mixed_selection(monkeypatch, 
 
 def test_classify_preview_shows_only_per_invoice_document_without_fuel(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "7",
         "mark": ["900000000001048"],
         "e3_900000000001048": "E3_585_016",
@@ -830,7 +829,7 @@ def test_classify_preview_shows_only_per_invoice_document_without_fuel(monkeypat
 
 def test_classify_preview_shows_only_per_line_document_for_fuel_only(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/preview", data={
+    resp = local_client().post("/classify/preview", data={
         "year": "2026", "month": "7",
         "mark": ["900000000001047"],
         "e3_900000000001047": "E3_585_016",
@@ -852,7 +851,7 @@ def test_classify_send_posts_both_documents_with_the_right_per_invoice_flag(monk
         return [{"invoice_mark": mark, "classification_mark": "1" + mark,
                  "status": "Success", "errors": []}], "<raw/>"
     monkeypatch.setattr(classify_routes, "send_expenses_classification", fake_send)
-    resp = TestClient(app).post("/classify/send", data={
+    resp = local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_invoice": "<a/>", "xml_per_line": "<b/>"})
     assert resp.status_code == 200
     assert calls == [("<a/>", True), ("<b/>", False)]
@@ -872,7 +871,7 @@ def test_classify_send_keeps_first_marks_when_second_request_is_rate_limited(mon
                      "status": "Success", "errors": []}], "<raw/>"
         raise HTTPError("https://mydatapi.aade.gr", 429, "Too Many Requests", {}, None)
     monkeypatch.setattr(classify_routes, "send_expenses_classification", fake_send)
-    resp = TestClient(app).post("/classify/send", data={
+    resp = local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_invoice": "<a/>", "xml_per_line": "<b/>"})
     assert resp.status_code == 207
     text = _visible(resp.text)
@@ -888,7 +887,7 @@ def test_classify_send_refuses_when_no_document_was_submitted(monkeypatch, db, d
     def boom(*a, **kw):
         raise AssertionError("δεν πρέπει να γίνει καμία υποβολή")
     monkeypatch.setattr(classify_routes, "send_expenses_classification", boom)
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7"})
     assert resp.status_code == 400
     assert "XML" in _visible(resp.text)
 
@@ -930,7 +929,7 @@ def test_classify_send_keeps_first_marks_when_second_request_breaks(
                      "status": "Success", "errors": []}], "<raw/>"
         raise make_error()
     monkeypatch.setattr(classify_routes, "send_expenses_classification", fake_send)
-    resp = TestClient(app).post("/classify/send", data={
+    resp = local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_invoice": "<a/>", "xml_per_line": "<b/>"})
     assert resp.status_code == 207
     text = _visible(resp.text)
@@ -956,7 +955,7 @@ def test_classify_send_logs_unknown_outcome_when_the_only_request_breaks(
     def fake_refresh(*a, **kw):
         called["refresh"] = True
     monkeypatch.setattr(classify_routes, "refresh", fake_refresh)
-    resp = TestClient(app).post("/classify/send", data={
+    resp = local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_invoice": "<a/>"})
     assert resp.status_code == 502
     assert "portal" in _visible(resp.text)
@@ -984,7 +983,7 @@ def test_classify_send_logs_marks_of_the_unknown_request_from_its_xml(monkeypatc
     def fake_send(xml, per_invoice=True, *, env):
         raise ET.ParseError("not well-formed")
     monkeypatch.setattr(classify_routes, "send_expenses_classification", fake_send)
-    resp = TestClient(app).post("/classify/send", data={
+    resp = local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_line": _UNKNOWN_REQUEST_XML})
     assert resp.status_code == 502
     row = db.execute("select invoice_mark, status, per_invoice, e3_type, amount, errors "
@@ -1003,7 +1002,7 @@ def test_classify_send_says_resend_only_once_when_both_requests_are_rate_limited
     def fake_send(xml, per_invoice=True, *, env):
         raise HTTPError("https://mydatapi.aade.gr", 429, "Too Many Requests", {}, None)
     monkeypatch.setattr(classify_routes, "send_expenses_classification", fake_send)
-    resp = TestClient(app).post("/classify/send", data={
+    resp = local_client().post("/classify/send", data={
         "year": "2026", "month": "7", "xml_per_invoice": "<a/>", "xml_per_line": "<b/>"})
     assert resp.status_code == 503
     error = _visible(resp.text)
@@ -1026,7 +1025,7 @@ def _classify_screen(monkeypatch, db, db_cfg, taxpayer, fixtures_dir,
         add_snapshot(db, taxpayer.id, mark, "e3_info", f, issue_date, lines=e3_lines)
         db.commit()
     _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/classify?year=2026&month=7")
+    resp = local_client().get("/classify?year=2026&month=7")
     assert resp.status_code == 200
     return resp.text
 
@@ -1085,7 +1084,7 @@ def _classify_preview(monkeypatch, db, db_cfg, taxpayer, fixtures_dir, category,
         add_snapshot(db, taxpayer.id, mark, "e3_info", f, issue_date, lines=e3_lines)
         db.commit()
     _wire_classify(monkeypatch, db_cfg)
-    return TestClient(app).post("/classify/preview", data={
+    return local_client().post("/classify/preview", data={
         "year": "2026", "month": "7", "mark": [mark],
         f"e3_{mark}": "E3_585_016",
         f"category_{mark}": category})
@@ -1131,7 +1130,7 @@ def test_classify_screen_renders_inside_the_dashboard_shell(monkeypatch, db, db_
     """Η οθόνη μήνα κληρονομεί το ίδιο κέλυφος: η ταυτότητα του αποστολέα και το
     κατώφλι του αμετάκλητου μένουν ορατά και εδώ."""
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/classify?year=2026&month=7")
+    resp = local_client().get("/classify?year=2026&month=7")
     assert resp.status_code == 200
     assert "/static/app.css" in resp.text
     assert "123456783" in resp.text
@@ -1141,7 +1140,7 @@ def test_classify_screen_renders_inside_the_dashboard_shell(monkeypatch, db, db_
 def test_classify_screen_says_the_preview_does_not_send(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     """Πριν από κάθε αμετάκλητο βήμα η οθόνη λέει ρητά τι κάνει το κουμπί."""
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/classify?year=2026&month=7")
+    resp = local_client().get("/classify?year=2026&month=7")
     assert "Δεν στέλνει" in resp.text
 
 def _visible(html):
@@ -1179,7 +1178,7 @@ def _sent_screen(monkeypatch, db, db_cfg, taxpayer, fixtures_dir, results, **ext
                         lambda xml, per_invoice=True, *, env: (results, "<raw/>"))
     if "refresh" in extra:
         monkeypatch.setattr(classify_routes, "refresh", extra["refresh"])
-    return TestClient(app).post("/classify/send",
+    return local_client().post("/classify/send",
                                 data={"xml_per_invoice": "<x/>", "year": "2026", "month": "7"})
 
 _ONE_OK = [{"invoice_mark": "900000000001048", "classification_mark": "900000000001055",
@@ -1218,7 +1217,7 @@ def test_sent_screen_surfaces_a_refresh_failure_as_207(monkeypatch, db, db_cfg, 
 
 def test_sent_screen_renders_a_refusal_as_a_sentence(monkeypatch, db, db_cfg, taxpayer):
     _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/classify/send", data={"year": "2026", "month": "7"})
+    resp = local_client().post("/classify/send", data={"year": "2026", "month": "7"})
     assert resp.status_code == 400
     assert "Δεν στάλθηκε κανένα XML χαρακτηρισμού" in _visible(resp.text)
 
@@ -1227,7 +1226,7 @@ def test_transmit_form_shows_the_issue_date_as_dd_mm_yyyy(monkeypatch, db, db_cf
     του browser (σε en-US η 2 Σεπτεμβρίου φαινόταν «9/2/2026») και η σελίδα δεν
     μπορεί να το αλλάξει. Το native ημερολόγιο μένει, πίσω από το κουμπί."""
     _wire(monkeypatch, db_cfg)
-    page = TestClient(app).get("/transmit").text
+    page = local_client().get("/transmit").text
     assert 'name="issue_date" type="text"' in page
     assert 'placeholder="dd-mm-yyyy"' in page
     assert r'pattern="\d{2}-\d{2}-\d{4}"' in page
@@ -1237,7 +1236,7 @@ def test_transmit_form_shows_the_issue_date_as_dd_mm_yyyy(monkeypatch, db, db_cf
 def test_transmit_preview_accepts_the_dd_mm_yyyy_the_form_sends(monkeypatch, db, db_cfg, taxpayer):
     _refreshed_transmitted(db, taxpayer)
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview",
+    resp = local_client().post("/transmit/preview",
                                 data={"preset": "κοινόχρηστα", "issue_date": "01-08-2026",
                                       "net": "12,00", "series": "123456783",
                                       "aa": "8000000020"})
@@ -1247,7 +1246,7 @@ def test_transmit_preview_accepts_the_dd_mm_yyyy_the_form_sends(monkeypatch, db,
 
 def test_transmit_preview_refuses_a_date_in_another_format(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview",
+    resp = local_client().post("/transmit/preview",
                                 data={"preset": "κοινόχρηστα", "issue_date": "01/08/2026",
                                       "net": "12,00", "series": "1", "aa": "2"})
     assert resp.status_code == 400
@@ -1256,7 +1255,7 @@ def test_transmit_preview_refuses_a_date_in_another_format(monkeypatch, db, db_c
 def test_transmit_preview_refusal_keeps_what_was_typed(monkeypatch, db, db_cfg, taxpayer):
     """Άρνηση δεν επιτρέπεται να σβήσει τη φόρμα: ο χρήστης δεν ξαναπληκτρολογεί."""
     _wire(monkeypatch, db_cfg)
-    resp = TestClient(app).post("/transmit/preview",
+    resp = local_client().post("/transmit/preview",
                                 data={"preset": "κοινόχρηστα",
                                       "issue_date": "2026-08-01", "net": "1.250",
                                       "series": "123456783", "aa": ""})
@@ -1268,14 +1267,14 @@ def test_transmit_preview_refusal_keeps_what_was_typed(monkeypatch, db, db_cfg, 
 
 def test_transmit_screens_share_the_shell_and_the_gate(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    page = TestClient(app).get("/transmit").text
+    page = local_client().get("/transmit").text
     assert "/static/app.css" in page
     assert "ΑΜΕΤΑΚΛΗΤΟ" in page
     assert 'href="/transmit" aria-current="page"' in page
 
 def test_index_uses_a_month_picker_for_the_classification_period(monkeypatch, db, db_cfg, taxpayer):
     _wire(monkeypatch, db_cfg)
-    page = TestClient(app).get("/").text
+    page = local_client().get("/").text
     form = re.search(r'<form[^>]*action="/classify".*?</form>', page, re.S).group(0)
     assert 'type="month"' in form
     assert 'name="period"' in form
@@ -1283,7 +1282,7 @@ def test_index_uses_a_month_picker_for_the_classification_period(monkeypatch, db
 
 def test_classify_accepts_a_period_from_the_month_picker(monkeypatch, db, db_cfg, taxpayer, fixtures_dir):
     _seed_july(db, taxpayer, fixtures_dir); _wire_classify(monkeypatch, db_cfg)
-    resp = TestClient(app).get("/classify?period=2026-07")
+    resp = local_client().get("/classify?period=2026-07")
     assert resp.status_code == 200
     assert "07/2026" in _visible(resp.text)
 
@@ -1292,16 +1291,16 @@ def test_κάθε_σελίδα_δείχνει_dev(monkeypatch, db, db_cfg, taxpa
     from esoda_exoda.web import counterparty_routes
     monkeypatch.setattr(counterparty_routes, "load_config", lambda: db_cfg)
     for path in ("/", "/counterparties"):
-        html = TestClient(app).get(path).text
+        html = local_client().get(path).text
         assert 'class="envbar envbar--dev"' in html and "DEV (sandbox ΑΑΔΕ)" in html
 
 def test_production_δείχνει_αμετάκλητες(monkeypatch, db, db_cfg):
     from esoda_exoda.taxpayers import create_taxpayer
     create_taxpayer(db, "123456783", environment="production"); db.commit()
     _wire(monkeypatch, db_cfg)
-    html = TestClient(app).get("/").text
+    html = local_client().get("/").text
     assert "envbar--production" in html and "PRODUCTION — οι διαβιβάσεις είναι αμετάκλητες" in html
 
 def test_σελίδα_σφάλματος_χωρίς_ένδειξη(monkeypatch, db, db_cfg):
     _wire(monkeypatch, db_cfg)
-    assert "envbar" not in TestClient(app).get("/").text
+    assert "envbar" not in local_client().get("/").text
