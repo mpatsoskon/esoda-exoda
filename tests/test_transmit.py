@@ -9,7 +9,8 @@ from esoda_exoda.classifications import SelfDeclared
 from esoda_exoda.counterparties import ForeignSupplier
 from esoda_exoda.transmit import (
     Entry, TransmitError, build_xml, build_xml_14, next_aa, notional_vat,
-    parse_amount, parse_entry_summary, parse_issue_date, parse_response)
+    parse_amount, parse_entry_summary, parse_issue_date, parse_response,
+    check_identifier)
 
 ACCEPTED_172 = """<?xml version="1.0" encoding="utf-8"?>
 <InvoicesDoc xmlns="http://www.aade.gr/myDATA/invoice/v1.0"
@@ -365,3 +366,12 @@ def test_build_xml_14_escapes_aa():
                        "10000", "ΑΛΦΑΠΟΛΗ")
     root = ET.fromstring(xml)
     assert _txt(_els(root, "invoiceHeader")[0], "aa") == "<1>"
+
+@pytest.mark.parametrize("value", ["", "0", "A&B", "<1>", "Α", "123456783", "x" * 50])
+def test_check_identifier_δέχεται(value):
+    assert check_identifier("Σειρά", value) == value
+
+@pytest.mark.parametrize("value", ["A\nB", "A\tB", "A\x00B", "A\x7fB", "x" * 51])
+def test_check_identifier_απορρίπτει(value):
+    with pytest.raises(TransmitError, match="Σειρά"):
+        check_identifier("Σειρά", value)

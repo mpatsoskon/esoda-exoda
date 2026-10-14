@@ -206,6 +206,19 @@ def parse_issue_date(raw: str) -> date:
         raise TransmitError(
             f"Μη έγκυρη ημερομηνία: «{raw}». Μορφή dd-mm-yyyy, π.χ. 02-09-2026.")
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+MAX_IDENTIFIER = 50
+
+def check_identifier(label: str, value: str) -> str:
+    """Η σειρά και το ΑΑ τα πληκτρολογεί ο χρήστης και διαβιβάζονται αμετάκλητα: μια
+    αλλαγή γραμμής ή ένα κείμενο που επικολλήθηκε κατά λάθος δεν πρέπει να φτάσει στο XML."""
+    if _CONTROL.search(value):
+        raise TransmitError(f"{label}: περιέχει μη επιτρεπτούς χαρακτήρες "
+                            "(π.χ. αλλαγή γραμμής ή tab).")
+    if len(value) > MAX_IDENTIFIER:
+        raise TransmitError(f"{label}: έως {MAX_IDENTIFIER} χαρακτήρες.")
+    return value
+
 def _local(tag: str) -> str:
     return tag.split("}")[-1]
 

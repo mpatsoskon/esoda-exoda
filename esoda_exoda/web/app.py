@@ -23,7 +23,7 @@ from .. import mydata_client
 from ..mydata_client import send_invoices
 from ..transmit import (Entry, TransmitError, build_xml, build_xml_14, next_aa,
                         notional_vat, parse_amount, parse_entry_summary,
-                        parse_issue_date)
+                        parse_issue_date, check_identifier)
 from .classify_routes import router as classify_router
 from .counterparty_routes import router as counterparty_router
 from .origin_guard import origin_guard
@@ -160,6 +160,9 @@ def transmit_preview(request: Request, preset: str = Form(...),
     try:
         d = parse_issue_date(issue_date)
         net_value = parse_amount(net)
+        # Μετά το strip: αυτό είναι που θα διαβιβαστεί.
+        check_identifier("Σειρά", series.strip())
+        check_identifier("ΑΑ", aa.strip())
     except TransmitError as e:
         return _transmit_form_again(request, cfg, tp, str(e), form)
     aa_value = aa.strip()

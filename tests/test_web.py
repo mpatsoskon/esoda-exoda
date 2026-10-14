@@ -5,6 +5,7 @@ import io
 import re
 import ssl
 from datetime import date
+from html import unescape
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 import openpyxl
@@ -178,6 +179,39 @@ def test_transmit_preview_refuses_blank_aa_for_13x(monkeypatch, db, db_cfg, taxp
     _wire(monkeypatch, db_cfg)
     resp = local_client().post("/transmit/preview", data={"preset": "κοινόχρηστα", "issue_date": "01-08-2026", "net": "12"})
     assert resp.status_code == 400 and "αριθμός λογαριασμού" in resp.text
+
+def test_preview_απορρίπτει_σειρά_με_αλλαγή_γραμμής(monkeypatch, db, db_cfg, taxpayer):
+    _refreshed_transmitted(db, taxpayer); _wire(monkeypatch, db_cfg)
+    resp = local_client().post("/transmit/preview", data={
+        "preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1",
+        "series": "A\nB", "aa": "7"})
+    assert resp.status_code == 400 and "μη επιτρεπτούς χαρακτήρες" in _visible(resp.text)
+    assert 'name="series" type="text" value="A\nB"' in resp.text  # η φόρμα κρατά ό,τι πληκτρολογήθηκε
+
+def test_preview_απορρίπτει_υπερβολικά_μεγάλο_αα(monkeypatch, db, db_cfg, taxpayer):
+    _refreshed_transmitted(db, taxpayer); _wire(monkeypatch, db_cfg)
+    resp = local_client().post("/transmit/preview", data={
+        "preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1",
+        "series": "0", "aa": "9" * 51})
+    assert resp.status_code == 400 and "50 χαρακτήρες" in _visible(resp.text)
+
+def test_preview_δέχεται_ελληνική_σειρά(monkeypatch, db, db_cfg, taxpayer):
+    _refreshed_transmitted(db, taxpayer); _wire(monkeypatch, db_cfg)
+    resp = local_client().post("/transmit/preview", data={
+        "preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1",
+        "series": "Α", "aa": "7"})
+    assert resp.status_code == 200
+
+def test_preview_σειρά_με_αμπερσάντ_δίνει_έγκυρο_xml_στο_κρυφό_πεδίο(monkeypatch, db, db_cfg, taxpayer):
+    import xml.etree.ElementTree as ET
+    _refreshed_transmitted(db, taxpayer); _wire(monkeypatch, db_cfg)
+    resp = local_client().post("/transmit/preview", data={
+        "preset": "αποσβέσεις", "issue_date": "31-12-2026", "net": "1",
+        "series": "A&B", "aa": "7"})
+    assert resp.status_code == 200
+    hidden = re.search(r'name="xml" value="([^"]*)"', resp.text).group(1)
+    root = ET.fromstring(unescape(hidden))
+    assert [e.text for e in root.iter() if e.tag.endswith("}series")] == ["A&B"]
 
 def test_foreign_preview_builds_xml_with_notional_vat(monkeypatch, db, db_cfg, taxpayer):
     cid = _seed_foreign(db, taxpayer); _seed_transmitted(db, taxpayer); _wire(monkeypatch, db_cfg)
