@@ -367,11 +367,12 @@ def test_build_xml_14_escapes_aa():
     root = ET.fromstring(xml)
     assert _txt(_els(root, "invoiceHeader")[0], "aa") == "<1>"
 
-@pytest.mark.parametrize("value", ["", "0", "A&B", "<1>", "Α", "123456783", "x" * 50])
+@pytest.mark.parametrize("value", ["", "0", "A&B", "<1>", "Α", "123456783", "x" * 50, "A B", "Α-1/2"])
 def test_check_identifier_δέχεται(value):
     assert check_identifier("Σειρά", value) == value
 
-@pytest.mark.parametrize("value", ["A\nB", "A\tB", "A\x00B", "A\x7fB", "x" * 51])
+@pytest.mark.parametrize("value", ["A\nB", "A\tB", "A\x00B", "A\x7fB", "x" * 51,
+                                   "A\u00a0B", "123\u200b", "A\x85B", "A\u2028B", "A\uffffB"])
 def test_check_identifier_απορρίπτει(value):
     with pytest.raises(TransmitError, match="Σειρά"):
         check_identifier("Σειρά", value)

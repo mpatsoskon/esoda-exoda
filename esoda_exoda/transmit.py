@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date
 import re
+import unicodedata
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape as _x
 
@@ -206,15 +207,21 @@ def parse_issue_date(raw: str) -> date:
         raise TransmitError(
             f"Μη έγκυρη ημερομηνία: «{raw}». Μορφή dd-mm-yyyy, π.χ. 02-09-2026.")
 
-_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 MAX_IDENTIFIER = 50
+
+def _invisible_or_control(ch: str) -> bool:
+    category = unicodedata.category(ch)
+    return category[0] == "C" or (category[0] == "Z" and ch != " ")
 
 def check_identifier(label: str, value: str) -> str:
     """Η σειρά και το ΑΑ τα πληκτρολογεί ο χρήστης και διαβιβάζονται αμετάκλητα: μια
-    αλλαγή γραμμής ή ένα κείμενο που επικολλήθηκε κατά λάθος δεν πρέπει να φτάσει στο XML."""
-    if _CONTROL.search(value):
+    αλλαγή γραμμής ή ένα κείμενο που επικολλήθηκε κατά λάθος δεν πρέπει να φτάσει στο XML.
+    Απορρίπτονται και οι αόρατοι χαρακτήρες (NBSP, zero-width): ένα ΑΑ με αόρατο
+    χαρακτήρα φαίνεται διαφορετικό στον έλεγχο διπλής διαβίβασης και θα περνούσε ως
+    καινούργιο."""
+    if any(_invisible_or_control(ch) for ch in value):
         raise TransmitError(f"{label}: περιέχει μη επιτρεπτούς χαρακτήρες "
-                            "(π.χ. αλλαγή γραμμής ή tab).")
+                            "(π.χ. αλλαγή γραμμής, tab ή αόρατο κενό από επικόλληση).")
     if len(value) > MAX_IDENTIFIER:
         raise TransmitError(f"{label}: έως {MAX_IDENTIFIER} χαρακτήρες.")
     return value

@@ -95,3 +95,11 @@ def test_static_περνά():
 ])
 def test_refusal(method, headers, refused):
     assert (refusal(method, headers) is not None) is refused
+
+def test_refusal_με_headers_του_starlette():
+    # Τα headers του request είναι case-insensitive· ο φύλακας πρέπει να τα διαβάζει
+    # όπως τα δίνει ο browser, με κεφαλαία.
+    from starlette.datastructures import Headers
+    ok = Headers({"Host": "127.0.0.1:8000", "Origin": "http://127.0.0.1:8000"})
+    assert refusal("POST", ok) is None
+    assert refusal("POST", Headers({"Host": "evil.example"})) is not None

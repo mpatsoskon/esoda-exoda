@@ -161,11 +161,10 @@ def transmit_preview(request: Request, preset: str = Form(...),
         d = parse_issue_date(issue_date)
         net_value = parse_amount(net)
         # Μετά το strip: αυτό είναι που θα διαβιβαστεί.
-        check_identifier("Σειρά", series.strip())
-        check_identifier("ΑΑ", aa.strip())
+        series_value = check_identifier("Σειρά", series.strip())
+        aa_value = check_identifier("ΑΑ", aa.strip())
     except TransmitError as e:
         return _transmit_form_again(request, cfg, tp, str(e), form)
-    aa_value = aa.strip()
     if not aa_value:
         # Στα 13.x το ΑΑ είναι ο αριθμός λογαριασμού του παρόχου, όχι δική μας
         # αρίθμηση: το next_aa θα επινοούσε αριθμό σε αμετάκλητη διαβίβαση. Η
@@ -187,7 +186,7 @@ def transmit_preview(request: Request, preset: str = Form(...),
             fetched = has_fetched(conn, tp.id, "RequestTransmittedDocs")
         if not fetched:
             return _transmit_form_again(request, cfg, tp, _REFRESH_FIRST, form)
-    entry = Entry(inv_type=p["inv_type"], series=series.strip() or "0",
+    entry = Entry(inv_type=p["inv_type"], series=series_value or "0",
                   aa=aa_value,
                   issue_date=d, net=net_value, vat=0.0,
                   vat_category=p["vat_category"],

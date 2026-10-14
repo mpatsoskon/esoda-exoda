@@ -6,14 +6,14 @@ from starlette.responses import PlainTextResponse
 _HOSTS = {"127.0.0.1", "localhost"}
 _SAFE = {"GET", "HEAD", "OPTIONS"}
 _CROSS = ("Άρνηση: το αίτημα δεν ήρθε από σελίδα της εφαρμογής. Αν το έστειλες εσύ από "
-             "την εφαρμογή, κάποια επέκταση του browser αφαιρεί τα headers Origin/Sec-Fetch-Site.")
+          "την εφαρμογή, κάποια επέκταση του browser αφαιρεί τα headers Origin/Sec-Fetch-Site.")
 
 def refusal(method: str, headers: Mapping[str, str]) -> str | None:
     """None όταν το αίτημα περνά, αλλιώς ο λόγος της άρνησης.
 
     Host: ο server ακούει μόνο στο 127.0.0.1, αλλά με DNS rebinding μια ξένη σελίδα φτάνει
     εδώ με το δικό της hostname και διαβάζει ό,τι δείχνει η εφαρμογή. Η θύρα δεν ελέγχεται
-    (το demo τρέχει σε άλλη)· την ελέγχει το Origin, που πρέπει να ταιριάζει ακριβώς.
+    (αλλάζει με το `--port` του uvicorn)· την ελέγχει το Origin, που πρέπει να ταιριάζει ακριβώς.
 
     Προέλευση: μια ξένη σελίδα μπορεί να υποβάλει φόρμα urlencoded χωρίς preflight. Ο
     browser δηλώνει πάντα από πού προέρχεται το POST· όποιο αίτημα δεν το δηλώνει δεν το

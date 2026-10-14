@@ -21,7 +21,8 @@
 5. **Συνόψεις** — `books_query` (γραμμές βιβλίου από τη βάση), `e3`, `vat`, `excel_sheets`
    (layout φύλλων), `export` (Excel κατ' απαίτηση σε bytes, χωρίς αρχεία στο δίσκο), `models`.
 6. **Διεπαφή** — `web/` (FastAPI· `app.py`, `classify_routes.py`, `counterparty_routes.py`,
-   `templating.py`, πρότυπα Jinja2 και στατικά αρχεία) και `cli` (`esoda-exoda` ξεκινά την
+   `templating.py`, `origin_guard.py` (δέχεται μόνο Host 127.0.0.1/localhost, και POST μόνο από
+   τις σελίδες της εφαρμογής· αλλιώς 403), πρότυπα Jinja2 και στατικά αρχεία) και `cli` (`esoda-exoda` ξεκινά την
    εφαρμογή στο 127.0.0.1:8000· `esoda-exoda setup` κάνει το αρχικό στήσιμο, `esoda-exoda keys` ξαναδίνει κλειδιά/κωδικό βάσης). Ρυθμίσεις:
    `config` (`config.toml`, `ESODA_EXODA_CONFIG`), κλειδιά: `credentials` (keyring).
 
