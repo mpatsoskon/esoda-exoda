@@ -16,6 +16,19 @@ HEADERS = {
 }
 WIDTHS = [8, 30, 18, 16, 14, 12, 11, 11, 11, 15, 22, 30, 34]
 
+def _sanitize_text(value):
+    """Prevent Excel formula injection by prefixing dangerous strings with a single quote.
+
+    Strings starting with =, +, -, or @ are treated as formulas by Excel.
+    Prefixing with ' forces them to be interpreted as text. Numbers and non-strings
+    are returned unchanged.
+    """
+    if not isinstance(value, str) or not value:
+        return value
+    if value[0] in ('=', '+', '-', '@'):
+        return "'" + value
+    return value
+
 def write_sheet(wb, name: str, rows: list[SheetRow], subtotal_parties=()) -> int:
     ws = wb.create_sheet(name)
     bold = Font(bold=True)
@@ -26,20 +39,20 @@ def write_sheet(wb, name: str, rows: list[SheetRow], subtotal_parties=()) -> int
     r = 2
     for n, row in enumerate(rows, start=1):
         ws.cell(row=r, column=1, value=n)
-        ws.cell(row=r, column=2, value=row.type)
-        ws.cell(row=r, column=3, value=row.series or None)
-        ws.cell(row=r, column=4, value=row.aa or None)
+        ws.cell(row=r, column=2, value=_sanitize_text(row.type))
+        ws.cell(row=r, column=3, value=_sanitize_text(row.series or None))
+        ws.cell(row=r, column=4, value=_sanitize_text(row.aa or None))
         d = ws.cell(row=r, column=5, value=row.date); d.number_format = "DD/MM/YYYY"
-        ws.cell(row=r, column=6, value=row.afm or None)
+        ws.cell(row=r, column=6, value=_sanitize_text(row.afm or None))
         for col, val in ((7, row.net), (8, row.vat), (9, row.total)):
             c = ws.cell(row=r, column=col, value=val); c.number_format = "#,##0.00"
         if name == "ΕΣΟΔΑ":
             c = ws.cell(row=r, column=10, value=float(row.col_j or 0)); c.number_format = "#,##0.00"
         else:
-            ws.cell(row=r, column=10, value=row.col_j)
-        ws.cell(row=r, column=11, value=row.charact)
-        ws.cell(row=r, column=12, value=row.category)
-        ws.cell(row=r, column=13, value=row.kind)
+            ws.cell(row=r, column=10, value=_sanitize_text(row.col_j))
+        ws.cell(row=r, column=11, value=_sanitize_text(row.charact))
+        ws.cell(row=r, column=12, value=_sanitize_text(row.category))
+        ws.cell(row=r, column=13, value=_sanitize_text(row.kind))
         r += 1
     first = 2
     last = max(first, r - 1)  # με μηδέν γραμμές το range μένει ορθό, όχι G2:G1

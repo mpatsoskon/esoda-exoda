@@ -58,3 +58,35 @@ def test_read_sheet_normalizes_latin_nai_oxi(tmp_path):
     _legacy_expense_book(p, ["NAI", "OXI", "ΝΑΙ", "ΌΧΙ"])  # τα δύο πρώτα λατινικά
     rows = read_sheet(p, "ΕΞΟΔΑ")
     assert [r.col_j for r in rows] == ["ΝΑΙ", "ΌΧΙ", "ΝΑΙ", "ΌΧΙ"]
+
+def test_write_sheet_sanitizes_formula_injection():
+    """Text values starting with =, +, -, @ are prefixed with ' to prevent formula injection."""
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    rows = [SheetRow(
+        type="=1+1",
+        series="+cmd|calc",
+        aa="-1+1",
+        date=date(2025, 1, 5),
+        afm="@SUM(A1)",
+        net=100.0,
+        vat=24.0,
+        total=124.0,
+        col_j="=1+1",
+        charact="normal",
+        category="=HYPERLINK(\"http://evil\")",
+        kind="safe",
+    )]
+    write_sheet(wb, "ΕΞΟΔΑ", rows)
+    ws = wb["ΕΞΟΔΑ"]
+    assert ws["B2"].value == "'=1+1"
+    assert ws["C2"].value == "'+cmd|calc"
+    assert ws["D2"].value == "'-1+1"
+    assert ws["F2"].value == "'@SUM(A1)"
+    assert ws["J2"].value == "'=1+1"
+    assert ws["K2"].value == "normal"
+    assert ws["L2"].value == "'=HYPERLINK(\"http://evil\")"
+    assert ws["M2"].value == "safe"
+    # Numbers and dates unchanged
+    assert ws["G2"].value == 100.0
+    assert ws["E2"].value == date(2025, 1, 5)
